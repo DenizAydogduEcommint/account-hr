@@ -29,21 +29,21 @@ Modellenecek ana varlıklar:
 - **audit_log**: değişiklik geçmişi
 
 ## Kabul Kriterleri (DOD)
-- [ ] ER diyagramı (görsel veya dbml/mermaid) çizildi, tüm tablolar ve ilişkiler gösterildi
-- [ ] services, providers, cards, expenses, invoices, periods, users, teams, service_contacts, files, audit_log tabloları migration olarak tanımlı
-- [ ] Enum'lar tanımlı: `invoice_status` (Bulundu/e-Fatura/Bekleniyor/Araştırılacak/Ignored), `frequency` (Aylık/Yıllık/Kullanım bazlı/Ad-hoc), `currency` (USD/EUR/TRY...), `active_state` (Evet/Hayır/Belirsiz)
-- [ ] İlişkiler doğru: service → provider (N:1), service → card (N:1 varsayılan), expense → service (N:1), expense → period (N:1), expense → card (N:1), invoice → expense (N:1), file → invoice (N:1, bir faturaya çok dosya), service_contact → service (N:1)
-- [ ] JPA entity'leri ve repository interface'leri oluşturuldu, uygulama hatasız ayağa kalkıyor
-- [ ] Para tutarları `NUMERIC(15,2)` olarak; tarih alanları `DATE`/`TIMESTAMP`
-- [ ] Servisler master'ı çekirdek varlık: bir servisin "her ay beklenen" olup olmadığı (frekans + aktiflik) sorgulanabilir
+- [x] ER diyagramı (mermaid) çizildi → `docs/er-diagram.md` + `docs/data-model.md`; kullanıcı ile gözden geçirilip onaylandı
+- [x] services, providers, cards, expenses, invoices, periods, users, teams, service_contacts, files, audit_log tabloları Flyway migration olarak tanımlı (`V1__init_schema.sql`)
+- [x] Enum'lar tanımlı: `invoice_status`, `frequency`, `currency`, `active_state` + ayrıca `user_role`, `invoice_source`, `file_type`, `audit_action` — hepsi DB'de STRING
+- [x] İlişkiler doğru: expense → service (N:1, ZORUNLU), expense → invoices (1:N), invoice → files (1:N), service → provider/card/team (N:1), service_contact → service (N:1)
+- [x] JPA entity + repository oluşturuldu; uygulama H2'de hatasız ayağa kalkıyor (5 test geçer) — **Postgres boot'u Docker yokluğundan doğrulanmadı** (aşağıya bkz.)
+- [x] Para tutarları `NUMERIC(15,2)` / `BigDecimal`; tarih `DATE`, zaman damgası `TIMESTAMP`
+- [x] Servisler master sorgulanabilir: `ServiceRepository.findByActiveStateAndFrequency` + `ExpenseRepository.existsByServiceIdAndPeriodId` (= "bu servisin bu ay satırı var mı")
 
 ## Alt Görevler
-- [ ] ER modelini çıkar (dbml/mermaid), kullanıcı ile gözden geçir
-- [ ] Migration aracı seç (Flyway öneri) ve baseline kur
-- [ ] Tabloları ve enum'ları migration script'leri olarak yaz
-- [ ] JPA entity + repository sınıflarını oluştur
-- [ ] Seed/lookup verisi: kartlar (3 adet), takımlar, ilk periods kayıtları
-- [ ] Index'ler: expense(period_id, service_id), invoice(status), unique kısıtları (ör. invoice no)
+- [x] ER modelini çıkar (mermaid), kullanıcı ile gözden geçir → onaylandı
+- [x] Migration aracı: **Flyway** (`flyway-core` + `flyway-database-postgresql`)
+- [x] Tabloları ve enum'ları migration script'leri olarak yaz (V1)
+- [x] JPA entity + repository sınıfları (12 entity / 11 repository)
+- [x] Seed verisi: 3 kart + periods 2026-01…06 (`V2`, idempotent ON CONFLICT) — _takımlar seed'i E2 import sırasında doldurulacak_
+- [x] Index'ler: `expenses(period_id, service_id)`, `invoices(status)`, partial unique `invoices(provider_id, invoice_no)`
 
 ## Teknik Notlar
 - Enum'lar DB'de string olarak saklanmalı (`@Enumerated(EnumType.STRING)`) — okunabilirlik ve migration güvenliği
@@ -53,7 +53,17 @@ Modellenecek ana varlıklar:
 - Duplicate tespiti için invoice no alanı + (provider, invoice_no) unique partial index
 - "Aktif Aylar" Servisler sheet'inde virgüllü string; modelde service ↔ period ilişkisinden türetilebilir (denormalize tutmak yerine sorgu ile)
 
-## Açık Sorular / Riskler
-- expense→invoice 1:N mi, invoice→expense 1:N mi? İade ve "Invoice+Receipt aynı işlem" senaryoları netleştirilmeli
-- Çoklu para birimi + TL karşılığı: kur tarihi ayrı saklanacak mı yoksa sadece ekstredeki TL mi yeterli? (MVP: sadece ekstre TL'si yeter)
-- Servisler master ile expense satırı arasında otomatik eşleme anahtarı ne olacak? (Hizmet adı + kart kombinasyonu kırılgan — service_id referansı şart)
+## Açık Sorular / Riskler — KARARA BAĞLANDI
+- ~~expense→invoice yönü?~~ → **expense → invoices (1:N)** seçildi (iade/duplicate/Invoice+Receipt esnekliği).
+- ~~Çoklu para birimi + kur?~~ → MVP: `amount` + `currency` + `amount_try` saklanır; kur tarihi/oranı **saklanmaz**.
+- ~~Servis-expense eşleme anahtarı?~~ → `expense.service_id` **zorunlu FK** (isim+kart kombinasyonu kullanılmaz).
+
+## Tamamlanma Kaydı
+- **Durum:** ✅ Tamamlandı (Postgres migration çalıştırma doğrulaması hariç) — 2026-06-24
+- **YouTrack:** E1-02 (IK-226 — teyit edilecek)
+- **Repo:** account-hr (backend) — commit bu güncelleme ile birlikte
+- **Üretilenler:** 12 entity (`BaseEntity` + 11 tablo), 8 enum (STRING), 11 repository, Flyway `V1`+`V2`, `docs/er-diagram.md`, `docs/data-model.md`
+- **Doğrulananlar:** `./mvnw package` ✅ · `./mvnw test` ✅ **5 test** (1 health + 4 domain JPA, H2 PostgreSQL modu)
+- **Önemli düzeltme:** `Period.year`/`month` SQL reserved word → fiziksel kolonlar `period_year`/`period_month` (Java alan adları korundu). H2'de DDL hatası gözlemlenip düzeltildi.
+- **Kalan iş:** Docker'lı ortamda `docker compose up` → Flyway `V1`/`V2` gerçek Postgres'te çalıştırma + `ddl-auto=validate` ile migration↔entity uyum teyidi.
+- **Not (Java):** pom Java 17 hedefliyor (görev özetindeki 21 değil) — mevcut pom'a saygı gösterildi.

@@ -2,12 +2,15 @@
 # boots without PostgreSQL or Docker. H2 is test-scoped only.
 spring:
   datasource:
-    url: jdbc:h2:mem:accounthr;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:mem:accounthr;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
   jpa:
     hibernate:
+      # Testlerde Hibernate şemayı entity'lerden üretir; Flyway (Postgres SQL) çalışmaz.
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: false
+  flyway:
+    enabled: false

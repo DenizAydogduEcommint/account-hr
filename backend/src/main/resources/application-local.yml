@@ -8,8 +8,11 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway şemayı kurar; JPA yalnızca eşlemeyi doğrular (asla şema değiştirmez).
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    enabled: true

@@ -60,7 +60,7 @@ Modellenecek ana varlıklar:
 
 ## Tamamlanma Kaydı
 - **Durum:** ✅ Tamamlandı (Postgres migration çalıştırma doğrulaması hariç) — 2026-06-24
-- **YouTrack:** E1-02 (IK-226 — teyit edilecek)
+- **YouTrack:** IK-226 — https://e-commint.youtrack.cloud/issue/IK-226
 - **Repo:** account-hr (backend) — commit bu güncelleme ile birlikte
 - **Üretilenler:** 12 entity (`BaseEntity` + 11 tablo), 8 enum (STRING), 11 repository, Flyway `V1`+`V2`, `docs/er-diagram.md`, `docs/data-model.md`
 - **Doğrulananlar:** `./mvnw package` ✅ · `./mvnw test` ✅ **5 test** (1 health + 4 domain JPA, H2 PostgreSQL modu)

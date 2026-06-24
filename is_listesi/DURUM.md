@@ -13,7 +13,7 @@
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
 | E1-01 | Proje iskeleti (Spring Boot + Angular + PostgreSQL + Docker) | ✅ | IK-225. İki repo. Docker `up` doğrulaması kaldı |
-| E1-02 | Veritabanı şeması & domain modeli | ✅ | SERVICE-FIRST. 12 entity/8 enum/Flyway. Postgres migration doğrulaması kaldı |
+| E1-02 | Veritabanı şeması & domain modeli | ✅ | IK-226. SERVICE-FIRST. 12 entity/8 enum/Flyway. Postgres migration doğrulaması kaldı |
 | E1-03 | Kimlik doğrulama & yetkilendirme (JWT) | ⬜ | Sıradaki |
 | E1-04 | Dosya depolama servisi | ⬜ | |
 | E1-05 | Config, secret, loglama, audit | ⬜ | |

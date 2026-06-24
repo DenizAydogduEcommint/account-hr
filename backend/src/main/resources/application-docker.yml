@@ -1,0 +1,12 @@
+# Docker Compose profile — datasource points at the `db` service.
+# Values come from environment variables set in docker-compose.yml.
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db:5432/accounthr}
+    username: ${SPRING_DATASOURCE_USERNAME:accounthr}
+    password: ${SPRING_DATASOURCE_PASSWORD:accounthr}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false

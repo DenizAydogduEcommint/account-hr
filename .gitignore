@@ -1,0 +1,27 @@
+# --- Secrets / env ---
+.env
+*.env.local
+
+# --- Java / Maven ---
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# --- Node / Angular ---
+node_modules/
+dist/
+.angular/cache/
+npm-debug.log*
+yarn-error.log*
+
+# --- Logs ---
+*.log
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

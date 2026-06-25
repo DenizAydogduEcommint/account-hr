@@ -118,6 +118,49 @@ class AuditCaptureIT {
             Invoice invoice = invoices.findById(invoiceId).orElseThrow();
             invoice.setStatus(InvoiceStatus.FOUND);
         }
+
+        /**
+         * Yeni bir Invoice oluşturup mutasyon yapar, ardından RuntimeException fırlatarak
+         * transaction'ı ROLLBACK'e zorlar. Beklenen: audit tamponu commit edilmez,
+         * audit_log'a HİÇBİR satır yazılmaz.
+         */
+        @Transactional
+        public void createInvoiceThenRollback() {
+            Provider provider = new Provider();
+            provider.setName("Rollback-" + System.nanoTime());
+            provider = providers.save(provider);
+
+            Service service = new Service();
+            service.setName("RollbackSvc");
+            service.setProvider(provider);
+            service.setFrequency(Frequency.MONTHLY);
+            service.setActiveState(ActiveState.YES);
+            service = services.save(service);
+
+            int n = SEQ.incrementAndGet();
+            int year = 2200 + n;
+            Period period = new Period();
+            period.setYear(year);
+            period.setMonth(1);
+            period.setCode("rb-" + year + "-01");
+            period = periods.save(period);
+
+            Expense expense = new Expense();
+            expense.setService(service);
+            expense.setPeriod(period);
+            expense.setTransactionDate(LocalDate.of(2026, 4, 1));
+            expense.setAmount(new BigDecimal("15.00"));
+            expense.setCurrency(Currency.USD);
+            expense = expenses.save(expense);
+
+            Invoice invoice = new Invoice();
+            invoice.setExpense(expense);
+            invoice.setStatus(InvoiceStatus.EXPECTED);
+            invoices.save(invoice);
+
+            // Audit kaydı tamponlanmış olur; rollback ile flush edilmemeli.
+            throw new RuntimeException("forced rollback");
+        }
     }
 
     @Autowired private AuditTestMutator mutator;
@@ -169,6 +212,20 @@ class AuditCaptureIT {
 
         assertThat(invoiceCreateRows).hasSize(1);
         assertThat(invoiceCreateRows.get(0).getEntityId()).isEqualTo(invoiceId);
+    }
+
+    @Test
+    void rolledBackTransactionWritesNoAuditRow() {
+        long before = auditLogRepository.count();
+
+        // @Transactional metot içinde RuntimeException → rollback.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> mutator.createInvoiceThenRollback())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("forced rollback");
+
+        // Rollback olduğu için audit_log'a HİÇBİR yeni satır yazılmamış olmalı.
+        assertThat(auditLogRepository.count()).isEqualTo(before);
     }
 
     @Test

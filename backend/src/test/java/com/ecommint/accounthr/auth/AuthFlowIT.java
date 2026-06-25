@@ -160,6 +160,30 @@ class AuthFlowIT {
         assertThat(reuse.getBody().get("error")).isEqualTo("UNAUTHORIZED");
     }
 
+    // FIX 2 (rotation race): aynı (rotate edilmiş) refresh token ile İKİNCİ refresh → 401.
+    // NOT: AuthService.refresh artık revocation'ı atomik UPDATE ... where revoked=false ile
+    // yapar; eşzamanlı iki çağrıdan yalnızca biri 1 satır günceller, diğeri 401 alır. Bu
+    // test sıralı (single-thread) durumu kanıtlar — ilk refresh token'ı tüketir, ikinci
+    // aynı eski token'la 401 döner. (refreshRotatesTokenAndOldOneIsRejected ile örtüşür;
+    // burada atomik yolun ikinci-çağrı reddini ayrıca izole eder.)
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void secondRefreshWithSameRotatedTokenReturns401() {
+        Map<String, Object> first = login(adminEmail, PASSWORD);
+        String oldRefresh = (String) first.get("refreshToken");
+
+        // İlk refresh: token'ı rotate eder (atomik iptal eder) → 200.
+        ResponseEntity<Map> ok = rest.postForEntity(
+                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+        assertThat(ok.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Aynı eski token ile ikinci refresh → 401 (revokeIfActive 0 satır günceller).
+        ResponseEntity<Map> second = rest.postForEntity(
+                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(second.getBody().get("error")).isEqualTo("UNAUTHORIZED");
+    }
+
     // logout revokes refresh token → 204, subsequent refresh → 401
     @Test
     @SuppressWarnings({ "rawtypes", "unchecked" })

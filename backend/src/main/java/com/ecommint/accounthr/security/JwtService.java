@@ -36,9 +36,29 @@ public class JwtService {
     private final long refreshTtlSeconds;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /** HS256 için minimum secret uzunluğu (byte): 256-bit = 32 byte. */
+    private static final int MIN_SECRET_BYTES = 32;
+
     public JwtService(JwtProperties properties) {
+        // FAIL-FAST: secret REPODA tutulmaz; eksik/kısa ise (staging/prod'da
+        // APP_JWT_SECRET set edilmemişse) uygulama açılışta net hata ile durur —
+        // EncryptionService master-key doğrulamasıyla aynı desen. Zayıf/forge'lanabilir
+        // imza ile sessizce boot etmek YASAK.
+        String secret = properties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT secret tanımlı değil: app.jwt.secret (env APP_JWT_SECRET) set edilmeli. "
+                            + "HS256 için en az " + MIN_SECRET_BYTES + " byte (UTF-8) gerekir. "
+                            + "Üretmek için: openssl rand -base64 48");
+        }
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "JWT secret çok kısa: " + secretBytes.length + " byte. HS256 için en az "
+                            + MIN_SECRET_BYTES + " byte (256-bit) gerekir (app.jwt.secret).");
+        }
         // HS256 için secret en az 256-bit (32 byte) olmalı.
-        this.signingKey = Keys.hmacShaKeyFor(properties.getSecret().getBytes(StandardCharsets.UTF_8));
+        this.signingKey = Keys.hmacShaKeyFor(secretBytes);
         this.accessTtlSeconds = properties.getAccessTtl();
         this.refreshTtlSeconds = properties.getRefreshTtl();
     }

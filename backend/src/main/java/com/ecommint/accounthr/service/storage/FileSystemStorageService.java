@@ -199,6 +199,30 @@ public class FileSystemStorageService implements StorageService {
         }
     }
 
+    @Override
+    public boolean deletePhysical(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return false;
+        }
+        Path file;
+        try {
+            file = resolveUnderRoot(relativePath);
+        } catch (StoragePathTraversalException e) {
+            log.warn("Orphan silme atlandı (kök dışı yol): {}", relativePath);
+            return false;
+        }
+        try {
+            boolean deleted = Files.deleteIfExists(file);
+            if (deleted) {
+                log.info("Orphan fiziksel dosya silindi: {}", relativePath);
+            }
+            return deleted;
+        } catch (IOException e) {
+            log.warn("Orphan fiziksel dosya silinemedi: {}", relativePath, e);
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Yardımcılar
     // ------------------------------------------------------------------------

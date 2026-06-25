@@ -22,6 +22,10 @@ spring:
 # CREDENTIAL_MASTER_KEY env'den gelmeli (bu değer ASLA kullanılmamalı).
 # Base64 kodlu 256-bit (32 byte) AES anahtarı. Üretmek için: openssl rand -base64 32
 app:
+  # E1-05 yalnızca-DEV JWT secret. Yalnızca yerel boot için; staging/prod'da ASLA
+  # kullanılmaz (APP_JWT_SECRET env'den gelmeli). HS256 için >=32 byte.
+  jwt:
+    secret: ${APP_JWT_SECRET:dev-only-local-jwt-secret-min-32-bytes-long-0123456789}
   crypto:
     master-key: ${CREDENTIAL_MASTER_KEY:ZGV2LW9ubHktbG9jYWwtbWFzdGVyLWtleS0zMmJ5dGU=}
 

@@ -98,3 +98,19 @@
 | E9-03 | Banka mutabakat | ⬜ | |
 | E9-04 | Satış faturaları & tahsilat | ⬜ | |
 | E9-05 | CoffeeTropic multitenant | ⬜ | |
+
+## Güvenlik / Teknik Borç (code review — 2026-06-25)
+Tüm E1 kodu (iki repo) Codex + Claude code-reviewer ile tarandı. **7 gerçek hata düzeltildi** (JWT secret default + fail-fast, refresh rotation race → atomic, file upload orphan → transaction rollback-delete, audit ThreadLocal → transaction-scoped + rollback guard + non-tx leak, FE: 401 sonsuz döngü sentinel, paylaşılan refresh, loadMe sadece 401/403). Aşağıdakiler **bilinçli olarak ertelendi** (gerekçeli):
+
+| Kod | Önem | Konu | Plan |
+|-----|------|------|------|
+| B2 | critical* | Admin seed `admin@e-commint.com/changeme123` Flyway V3'te | Prod öncesi env tabanlı bootstrap'e taşı (E1-06). Prod yok, "ilk girişte değiştir" notlu |
+| B3 | high | File endpoint'lerinde object-level yetki yok (her authenticated user erişir) | Rol/sahiplik kontrolü **E3-08** (rol bazlı görünümler) |
+| B6 | medium | Upload metadata (invoiceNo/date/service) client'tan; doğrulanmıyor | **E3**'te Invoice→Expense→Service'ten türet/doğrula |
+| F1 | high | Token'lar localStorage'da (XSS riski) | HttpOnly cookie auth — ileri faz prod sertleştirme (backend+frontend değişimi) |
+| B5 | medium | Eşzamanlı aynı-içerik upload ikisi de geçebilir (sha256 non-unique) | DB unique kısıt + 409; düşük öncelik (E2/E3) |
+| F5 | low | Guard sadece "token var mı" bakar | Backend her isteği doğruluyor; UX için expiry kontrolü sonra |
+| A2/A3 | low | `AuditFlusherHolder`/`EncryptionServiceHolder` JVM-global static | Tek Spring context'te çalışır; çok-context'e geçilirse bean-scoped wiring |
+| A4 | low | `LogMasker` henüz log noktalarına bağlı değil | Hassas değer loglanan ilk noktada devreye alınacak (şu an loglanmıyor) |
+
+\* B2 prod'a çıkmadan kapatılacak; MVP/dev'de kabul.

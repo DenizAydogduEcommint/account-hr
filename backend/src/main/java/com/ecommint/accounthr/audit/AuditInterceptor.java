@@ -4,6 +4,7 @@ import java.util.Set;
 
 import org.hibernate.Interceptor;
 import org.hibernate.Transaction;
+import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.type.Type;
 
 import com.ecommint.accounthr.domain.FileAsset;
@@ -113,37 +114,64 @@ public class AuditInterceptor implements Interceptor {
         }
     }
 
-    /** Audit kaydını ThreadLocal tampona ekler (commit'ten önce flush edilecek). */
+    /**
+     * Audit kaydını AKTİF TRANSACTION'a bağlı tampona ekler (bkz. {@link AuditContext}).
+     * Tampon transaction-bound olduğu için aynı thread'deki {@code REQUIRES_NEW} iç
+     * transaction dıştakinin tamponunu paylaşmaz/boşaltamaz.
+     */
     private void enqueue(AuditEntry entry) {
         AuditContext.add(entry);
     }
 
     /**
-     * Transaction commit'inden HEMEN ÖNCE Hibernate tarafından çağrılır (DB commit'ten
-     * önce, aynı transaction içinde). Burada biriken audit kayıtları {@code audit_log}'a
-     * yazılır; INSERT'ler asıl mutasyonla aynı commit'e dâhil olur (atomik). Bu callback,
-     * değişiklik ister erken (save/flush) ister commit anında dirty-check ile yakalansın
-     * her durumda çalıştığı için synchronization-sırası tuzağından etkilenmez.
+     * Transaction completion'dan HEMEN ÖNCE Hibernate tarafından çağrılır (bu transaction'a
+     * özgü). Bu noktada Hibernate'in pre-completion auto-flush'ı çalıştığı için dirty-check
+     * değişiklikleri yakalanmış ve CREATE id'leri atanmıştır.
+     *
+     * <p>ROLLBACK koruması: callback hem commit hem rollback yolunda tetiklenir. Transaction
+     * rollback'e işaretlenmişse audit kayıtları YAZILMAZ — yalnızca tampon temizlenir; aksi
+     * halde rollback edilen bir işlemin audit satırları yanlışlıkla commit edilebilirdi.
      */
     @Override
     public void beforeTransactionCompletion(Transaction tx) {
         if (AuditContext.isEmpty()) {
             return;
         }
+        if (isRollingBack(tx)) {
+            // Rollback yolunda audit satırı yazma; bu transaction'ın tamponunu boşalt.
+            AuditContext.drain();
+            return;
+        }
         AuditFlusher flusher = AuditFlusherHolder.get();
         if (flusher != null) {
             flusher.flush();
         } else {
-            // Flusher hazır değilse tamponu boşalt (sızıntı olmasın); audit kaybı loglanmaz
-            // çünkü bu yalnızca context boot olmadan teorik olarak mümkün.
+            // Flusher hazır değilse tamponu boşalt (sızıntı olmasın); yalnızca context
+            // boot olmadan teorik olarak mümkündür.
             AuditContext.drain();
         }
     }
 
     @Override
     public void afterTransactionCompletion(Transaction tx) {
-        // Thread havuzu yeniden kullanımında sızıntı olmasın diye tamponu temizle.
+        // Bu transaction'ın TSM resource'unu (ve fallback thread-local'i) çöz.
         AuditContext.clear();
+    }
+
+    /** Transaction commit'e değil rollback'e gidiyor mu? Durum okunamazsa güvenli=false. */
+    private boolean isRollingBack(Transaction tx) {
+        if (tx == null) {
+            return false;
+        }
+        try {
+            TransactionStatus status = tx.getStatus();
+            return status == TransactionStatus.MARKED_ROLLBACK
+                    || status == TransactionStatus.ROLLING_BACK
+                    || status == TransactionStatus.ROLLED_BACK
+                    || status == TransactionStatus.FAILED_COMMIT;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private static String stringify(Object value) {

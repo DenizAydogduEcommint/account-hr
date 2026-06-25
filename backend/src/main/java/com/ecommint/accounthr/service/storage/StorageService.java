@@ -56,4 +56,14 @@ public interface StorageService {
 
     /** İndirme için dosyayı Resource olarak yükler. */
     Resource loadAsResource(Long fileId);
+
+    /**
+     * Storage köküne göreli verilen fiziksel dosyayı en-iyi-çaba (best-effort) siler.
+     * {@link #store} sonrası metadata persist'i başarısız olursa orphan dosyayı
+     * temizlemek için kullanılır. Hata fırlatmaz; yalnızca silinip silinmediğini döndürür.
+     *
+     * @param relativePath {@link StoredFile#relativePath()} (kök altında olmalı)
+     * @return dosya gerçekten silindiyse {@code true}; yoksa/başarısızsa {@code false}
+     */
+    boolean deletePhysical(String relativePath);
 }

@@ -71,9 +71,14 @@ public class AuthService {
             throw new BadCredentialsException("Refresh token geçersiz veya süresi dolmuş.");
         }
 
-        // Rotation: eski token'ı iptal et.
-        stored.setRevoked(true);
-        refreshTokenRepository.save(stored);
+        // Rotation (ATOMİK): token'ı yalnızca hâlâ aktifse iptal et. Eşzamanlı iki
+        // refresh aynı token'la geldiğinde, ikisi de yukarıdaki revoked==false
+        // kontrolünü geçebilir; gerçek iptal tek bir UPDATE ... where revoked=false
+        // ile yapılır ve yalnızca BİR çağrı 1 satır günceller. Diğeri 0 alır → 401.
+        int revoked = refreshTokenRepository.revokeIfActive(hash);
+        if (revoked != 1) {
+            throw new BadCredentialsException("Refresh token geçersiz veya süresi dolmuş.");
+        }
 
         AppUser user = stored.getUser();
         if (!user.isActive()) {

@@ -15,10 +15,12 @@ server:
 
 # Uygulama özel ayarları (app.*).
 app:
-  # JWT ayarları (E1-03). Secret ve süreler env'den gelir; dev için varsayılanlar
-  # verilir. Secret HS256 için en az 32 byte olmalı. PROD'da APP_JWT_SECRET zorunlu.
+  # JWT ayarları (E1-03 / E1-05). Süreler env override'lı; SECRET için REPODA
+  # VARSAYILAN YOK — app.crypto.master-key deseni gibi boş bırakılır. local/test
+  # profilleri kendi "yalnızca-dev" secret'ını verir; staging/prod'da APP_JWT_SECRET
+  # env'den gelmeli (HS256 için en az 32 byte). Eksik/kısa ise boot fail (JwtService).
   jwt:
-    secret: ${APP_JWT_SECRET:dev-only-change-me-jwt-secret-min-32-bytes-long-0123456789}
+    secret: ${APP_JWT_SECRET:}
     # Access token ömrü: 15 dakika (saniye).
     access-ttl: ${APP_JWT_ACCESS_TTL:900}
     # Refresh token ömrü: 7 gün (saniye).

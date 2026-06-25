@@ -1,6 +1,7 @@
 package com.ecommint.accounthr.controller;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -28,9 +29,9 @@ import com.ecommint.accounthr.dto.file.FileResponse;
 import com.ecommint.accounthr.repository.AppUserRepository;
 import com.ecommint.accounthr.repository.FileAssetRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
+import com.ecommint.accounthr.service.FileUploadService;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StorageService;
-import com.ecommint.accounthr.service.storage.StoredFile;
 
 /**
  * Fatura dosyası uçları (E1-04). Tümü authenticated (SecurityConfig
@@ -42,15 +43,18 @@ import com.ecommint.accounthr.service.storage.StoredFile;
 public class FileController {
 
     private final StorageService storageService;
+    private final FileUploadService fileUploadService;
     private final FileAssetRepository fileAssetRepository;
     private final InvoiceRepository invoiceRepository;
     private final AppUserRepository userRepository;
 
     public FileController(StorageService storageService,
+                          FileUploadService fileUploadService,
                           FileAssetRepository fileAssetRepository,
                           InvoiceRepository invoiceRepository,
                           AppUserRepository userRepository) {
         this.storageService = storageService;
+        this.fileUploadService = fileUploadService;
         this.fileAssetRepository = fileAssetRepository;
         this.invoiceRepository = invoiceRepository;
         this.userRepository = userRepository;
@@ -79,36 +83,31 @@ public class FileController {
 
         // Duplicate kontrolü için provider/invoiceNo: parametre verilmemişse invoice'tan türet.
         Provider invProvider = invoice.getProvider();
-        Long providerId = invProvider != null ? invProvider.getId() : null;
+        Long providerId = FileUploadService.providerIdOf(invProvider);
         String effectiveInvoiceNo = invoiceNo != null ? invoiceNo : invoice.getInvoiceNo();
 
-        StoredFile stored;
+        AppUser uploader = resolveUploader(authentication);
+
+        InputStream content;
         try {
-            stored = storageService.store(
-                    invoiceId,
-                    invoiceDate,
-                    serviceName,
-                    providerId,
-                    effectiveInvoiceNo,
-                    file.getOriginalFilename(),
-                    file.getInputStream(),
-                    type);
+            content = file.getInputStream();
         } catch (IOException e) {
             throw new StorageException("Yüklenen dosya okunamadı.", e);
         }
 
-        AppUser uploader = resolveUploader(authentication);
-
-        FileAsset asset = new FileAsset();
-        asset.setInvoice(invoice);
-        asset.setFilePath(stored.relativePath());
-        asset.setFileName(stored.fileName());
-        asset.setFileType(type);
-        asset.setMimeType(file.getContentType());
-        asset.setSizeBytes(stored.sizeBytes());
-        asset.setSha256(stored.sha256());
-        asset.setUploadedBy(uploader);
-        asset = fileAssetRepository.save(asset);
+        // Depola + metadata persist'i tek transaction'da yapılır; persist başarısız
+        // olursa orphan fiziksel dosya FileUploadService tarafından silinir.
+        FileAsset asset = fileUploadService.upload(
+                invoice,
+                invoiceDate,
+                serviceName,
+                providerId,
+                effectiveInvoiceNo,
+                file.getOriginalFilename(),
+                content,
+                file.getContentType(),
+                type,
+                uploader);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(asset));
     }

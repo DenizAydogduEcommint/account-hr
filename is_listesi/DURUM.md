@@ -19,8 +19,8 @@
 | E1-03 | Kimlik doğrulama & yetkilendirme (JWT) | ✅ | IK-227. JWT+BCrypt+refresh, Angular login. Login+/me PG14'te doğrulandı (API) |
 | E1-04 | Dosya depolama servisi | ✅ | IK-228. StorageService, slugify, dedup, waiting/trash. V4+storage root PG14'te doğrulandı |
 | E1-05 | Config, secret, loglama, audit | ✅ | IK-229. AES-GCM credential şifreleme, JSON log, Hibernate audit, maskeleme. PG14 V5+validate doğrulandı |
-| E1-06 | CI/CD & dağıtım | ⬜ | Sıradaki |
-| E1-07 | API tasarım standartları | ⬜ | |
+| E1-06 | CI/CD & dağıtım | 🔄 | IK-230. CI tamam (GitHub Actions test/build + GHCR image, actionlint 0 hata). CD/staging ertelendi (deploy hedefi bekliyor) |
+| E1-07 | API tasarım standartları | ⬜ | Sıradaki |
 
 ## E2 — Veri Migrasyonu
 | Görev | Başlık | Durum | Not |

@@ -29,6 +29,19 @@ app:
   # NOT: expenses/faturalar (Drive aynası) ASLA bu servisle yönetilmez.
   storage:
     root: ${STORAGE_ROOT:${user.home}/account-hr-data/faturalar}
+  # Credential şifreleme (E1-05). master-key, servis panel parolaları/API key'leri
+  # AES-256-GCM ile şifrelemek için kullanılır. CREDENTIAL_MASTER_KEY env'inden gelir;
+  # base64 kodlu 256-bit (32 byte) olmalı. REPODA VARSAYILAN YOK — local/test profilleri
+  # kendi "yalnızca-dev" anahtarını verir. Staging/prod'da env zorunlu; eksikse boot fail.
+  crypto:
+    master-key: ${CREDENTIAL_MASTER_KEY:}
+
+# Loglama (E1-05). Varsayılan (local) profilde insan-okur desen; her satıra correlation
+# id (X-Request-Id) eklenir. staging/prod profilleri structured (JSON) loglamaya geçer.
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "
+    level: "%5p ${logging.pattern.correlation}"
 
 management:
   endpoints:

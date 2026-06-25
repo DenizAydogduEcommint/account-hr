@@ -31,6 +31,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-accounthr}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-accounthr}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-accounthr}
+      # E1-05: JWT secret + credential master key. .env'den gelir; verilmezse
+      # yalnızca-DEV varsayılanlar kullanılır (PROD'da MUTLAKA gerçek değer set edin).
+      # Master key base64 256-bit; varsayılan "dev-only-local-master-key-32byte".
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-dev-only-change-me-jwt-secret-min-32-bytes-long-0123456789}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY:-ZGV2LW9ubHktbG9jYWwtbWFzdGVyLWtleS0zMmJ5dGU=}
     ports:
       - "8080:8080"
 

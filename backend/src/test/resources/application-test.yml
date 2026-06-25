@@ -21,6 +21,10 @@ app:
     secret: test-only-fixed-jwt-secret-min-32-bytes-long-abcdefghijklmnop
     access-ttl: 900
     refresh-ttl: 604800
+  # E1-05 testler için sabit credential master key (base64, 256-bit). Üretimle alakasız.
+  # "test-fixed-master-key-32byte!!!!" düz metninin base64'ü.
+  crypto:
+    master-key: dGVzdC1maXhlZC1tYXN0ZXIta2V5LTMyYnl0ZSEhISE=
   # Storage kökü için güvenli test varsayılanı: build çıktısı altında izole bir
   # dizin (asla gerçek STORAGE_ROOT veya expenses/faturalar değil). Storage
   # testleri bunu @DynamicPropertySource ile JUnit @TempDir'e yönlendirir.

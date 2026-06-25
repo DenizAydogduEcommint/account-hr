@@ -13,3 +13,14 @@ spring:
     show-sql: false
   flyway:
     enabled: true
+
+# Structured (JSON) loglama — Spring Boot 3.x native (ek bağımlılık yok). ECS formatı,
+# stdout'a JSON; merkezi toplama (ELK/Loki, faz 2) için uygundur. Correlation id MDC'den
+# (correlationId) gelir. Seviye env ile override edilebilir.
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.ecommint.accounthr: ${LOG_LEVEL_APP:INFO}

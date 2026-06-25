@@ -16,3 +16,17 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+
+# E1-05 yalnızca-DEV credential master key. Uygulamanın yerelde boot olabilmesi için
+# verilmiştir; GERÇEK panel parolaları bununla şifrelenMEZ. Staging/prod'da
+# CREDENTIAL_MASTER_KEY env'den gelmeli (bu değer ASLA kullanılmamalı).
+# Base64 kodlu 256-bit (32 byte) AES anahtarı. Üretmek için: openssl rand -base64 32
+app:
+  crypto:
+    master-key: ${CREDENTIAL_MASTER_KEY:ZGV2LW9ubHktbG9jYWwtbWFzdGVyLWtleS0zMmJ5dGU=}
+
+# Local profilde insan-okur loglama (varsayılan desen + correlation id). DEBUG'a
+# uygulamanın paketini çek ki geliştirme sırasında akış görünür olsun.
+logging:
+  level:
+    com.ecommint.accounthr: DEBUG

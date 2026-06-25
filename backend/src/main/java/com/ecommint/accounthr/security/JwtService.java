@@ -9,9 +9,9 @@ import java.util.Date;
 
 import javax.crypto.SecretKey;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.ecommint.accounthr.config.JwtProperties;
 import com.ecommint.accounthr.domain.AppUser;
 
 import io.jsonwebtoken.Claims;
@@ -36,14 +36,11 @@ public class JwtService {
     private final long refreshTtlSeconds;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public JwtService(
-            @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.access-ttl}") long accessTtlSeconds,
-            @Value("${app.jwt.refresh-ttl}") long refreshTtlSeconds) {
+    public JwtService(JwtProperties properties) {
         // HS256 için secret en az 256-bit (32 byte) olmalı.
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.accessTtlSeconds = accessTtlSeconds;
-        this.refreshTtlSeconds = refreshTtlSeconds;
+        this.signingKey = Keys.hmacShaKeyFor(properties.getSecret().getBytes(StandardCharsets.UTF_8));
+        this.accessTtlSeconds = properties.getAccessTtl();
+        this.refreshTtlSeconds = properties.getRefreshTtl();
     }
 
     /** Access token TTL'i saniye cinsinden (login/refresh yanıtındaki expiresIn). */

@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 3 / 52 tamamlandı · **MVP = E1 + E2 + E3**
+**Özet:** 4 / 52 tamamlandı · **MVP = E1 + E2 + E3**
 
 ---
 
@@ -15,8 +15,8 @@
 | E1-01 | Proje iskeleti (Spring Boot + Angular + PostgreSQL + Docker) | ✅ | IK-225. İki repo. Docker `up` doğrulaması kaldı |
 | E1-02 | Veritabanı şeması & domain modeli | ✅ | IK-226. SERVICE-FIRST. 12 entity/8 enum/Flyway. Postgres migration doğrulaması kaldı |
 | E1-03 | Kimlik doğrulama & yetkilendirme (JWT) | ✅ | IK-227. JWT+BCrypt+refresh, Angular login. Canlı/Postgres doğrulaması kaldı |
-| E1-04 | Dosya depolama servisi | ⬜ | Sıradaki |
-| E1-05 | Config, secret, loglama, audit | ⬜ | |
+| E1-04 | Dosya depolama servisi | ✅ | IK-228. StorageService, fatura-tarihi klasör, slugify, dedup, waiting/trash. Postgres V4 doğrulaması kaldı |
+| E1-05 | Config, secret, loglama, audit | ⬜ | Sıradaki |
 | E1-06 | CI/CD & dağıtım | ⬜ | |
 | E1-07 | API tasarım standartları | ⬜ | |
 

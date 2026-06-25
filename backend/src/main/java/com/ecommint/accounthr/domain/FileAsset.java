@@ -53,6 +53,10 @@ public class FileAsset {
     @Column(name = "size_bytes")
     private Long sizeBytes;
 
+    /** İçeriğin SHA-256 hex digesti (64 karakter) — duplicate tespiti + bütünlük (E1-04). */
+    @Column(name = "sha256", length = 64)
+    private String sha256;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by")
     private AppUser uploadedBy;
@@ -115,6 +119,14 @@ public class FileAsset {
 
     public void setSizeBytes(Long sizeBytes) {
         this.sizeBytes = sizeBytes;
+    }
+
+    public String getSha256() {
+        return sha256;
+    }
+
+    public void setSha256(String sha256) {
+        this.sha256 = sha256;
     }
 
     public AppUser getUploadedBy() {

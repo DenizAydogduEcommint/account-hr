@@ -21,3 +21,8 @@ app:
     secret: test-only-fixed-jwt-secret-min-32-bytes-long-abcdefghijklmnop
     access-ttl: 900
     refresh-ttl: 604800
+  # Storage kökü için güvenli test varsayılanı: build çıktısı altında izole bir
+  # dizin (asla gerçek STORAGE_ROOT veya expenses/faturalar değil). Storage
+  # testleri bunu @DynamicPropertySource ile JUnit @TempDir'e yönlendirir.
+  storage:
+    root: ${java.io.tmpdir}/account-hr-test-storage

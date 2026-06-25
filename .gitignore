@@ -19,6 +19,12 @@ yarn-error.log*
 # --- Logs ---
 *.log
 
+# --- Fatura dosya depolama (E1-04) ---
+# Storage root (STORAGE_ROOT) repo DIŞINDADIR; yine de yanlışlıkla repo içinde bir
+# veri dizini oluşturulursa commit edilmesini engelle.
+account-hr-data/
+faturalar-data/
+
 # --- IDE / OS ---
 .idea/
 .vscode/

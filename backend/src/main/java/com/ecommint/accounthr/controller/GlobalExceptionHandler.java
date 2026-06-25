@@ -10,6 +10,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.ecommint.accounthr.service.storage.DuplicateFileException;
+import com.ecommint.accounthr.service.storage.StorageException;
+import com.ecommint.accounthr.service.storage.StoragePathTraversalException;
+
 /**
  * Tutarlı hata formatı: {"error":<CODE>,"message":<text>}.
  * - Geçersiz kimlik / kimlik doğrulama hatası → 401 UNAUTHORIZED
@@ -36,5 +40,28 @@ public class GlobalExceptionHandler {
                 .orElse("Geçersiz istek.");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", "VALIDATION_ERROR", "message", message));
+    }
+
+    // --- E1-04 dosya depolama ---
+
+    /** Mükerrer dosya (aynı provider+invoice_no veya aynı SHA-256) → 409 CONFLICT. */
+    @ExceptionHandler(DuplicateFileException.class)
+    public ResponseEntity<Map<String, String>> handleDuplicateFile(DuplicateFileException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", "DUPLICATE_FILE", "message", ex.getMessage()));
+    }
+
+    /** Path traversal / kök dışı yol → 400 BAD_REQUEST. */
+    @ExceptionHandler(StoragePathTraversalException.class)
+    public ResponseEntity<Map<String, String>> handlePathTraversal(StoragePathTraversalException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "INVALID_PATH", "message", ex.getMessage()));
+    }
+
+    /** Diğer depolama hataları (geçersiz girdi, I/O) → 400 BAD_REQUEST. */
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<Map<String, String>> handleStorage(StorageException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "STORAGE_ERROR", "message", ex.getMessage()));
     }
 }

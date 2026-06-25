@@ -79,6 +79,9 @@ Kartlar: Akbank Axess `****3800`, YKB Ticari `****3909`, Ziraat Bankkart `****91
 - **waiting / trash akışı:** işlenmemiş faturalar `waiting/`; eşleşmeyen/duplicate `trash/` (silinmez).
 - **Servisler çapraz doğrulama:** Aktif + Aylık her servis için o ay bir satır olmalı; eksikse "Bekleniyor" eklenir.
 - Para: `BigDecimal`, tarih: `DD.MM.YYYY`. Bilgi-amaçlı kalemler (Multinet, sigorta, vergi) operasyonel TOPLAM'a dahil değil.
+- **Dosya depolama kökü (storage root):** `STORAGE_ROOT` env değişkeninden (varsayılan `~/account-hr-data/faturalar`). **Repo dışı**, repoya commit edilmez. Uygulama başlangıçta kök + `waiting/` + `trash/` dizinlerini oluşturur.
+- **`expenses/faturalar` Drive aynasıdır — ASLA dokunulmaz** (kaynak/yedek). account-hr bu dizine yazmaz/silmez/taşımaz.
+- **Veri aktarımı = kopyalama** (E2-03'te): kaynak dosyalar storage root'a **kopyalanır**, orijinaller yerinde kalır. Silme/taşıma yok. `trash/` bile silme değil, taşımadır.
 
 ## Veri Migrasyonu
 Kaynak: Google Drive `2026_Harcamalar.xlsx` (her ay bir sheet + Servisler master) + `faturalar/` klasörleri. Migrasyon işleri E2 epic'inde.

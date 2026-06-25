@@ -25,6 +25,10 @@ public class AppUser extends BaseEntity {
     @Column(name = "full_name")
     private String fullName;
 
+    /** BCrypt parola hash'i (V3 migrasyonu, VARCHAR(100)). Asla plaintext saklanmaz. */
+    @Column(name = "password_hash", length = 100)
+    private String passwordHash;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     private UserRole role;
@@ -50,6 +54,14 @@ public class AppUser extends BaseEntity {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public UserRole getRole() {

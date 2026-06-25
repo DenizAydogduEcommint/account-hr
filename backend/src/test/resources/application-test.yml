@@ -14,3 +14,10 @@ spring:
     show-sql: false
   flyway:
     enabled: false
+
+# Testler için sabit JWT secret + kısa-makul TTL'ler. Üretimle alakasızdır.
+app:
+  jwt:
+    secret: test-only-fixed-jwt-secret-min-32-bytes-long-abcdefghijklmnop
+    access-ttl: 900
+    refresh-ttl: 604800

@@ -21,22 +21,22 @@ account-hr'da farklı yetki seviyeleri var:
 Spring Security + JWT kullanılacak. Mobil de aynı REST API'yi tüketeceği için session değil stateless token mantığı tercih ediliyor.
 
 ## Kabul Kriterleri (DOD)
-- [ ] `POST /api/auth/login` (email + parola) → JWT access token (+ refresh token) döner
-- [ ] `POST /api/auth/refresh` çalışır; access token süresi dolunca yenilenir
-- [ ] Roller tanımlı: `ROLE_ADMIN`, `ROLE_ACCOUNTING`, `ROLE_TEAM_MEMBER`
-- [ ] Endpoint'ler role göre korunuyor (`@PreAuthorize` veya security config); yetkisiz erişim 403 döner
-- [ ] Parolalar BCrypt ile hashlenmiş şekilde saklanıyor
-- [ ] Angular tarafında login akışı + token saklama + korumalı route iskeleti çalışıyor
-- [ ] Geçersiz/expired token → 401, tutarlı hata formatı (E1-07 ile uyumlu)
+- [x] `POST /api/auth/login` (email + parola) → JWT access + refresh token döner (`expiresIn:900`)
+- [x] `POST /api/auth/refresh` çalışır; rotate eder (eski refresh iptal), access yenilenir
+- [x] Roller tanımlı: `ROLE_ADMIN`, `ROLE_ACCOUNTING`, `ROLE_TEAM_MEMBER`
+- [x] Endpoint'ler role göre korunuyor (`@EnableMethodSecurity` + `@PreAuthorize`); yetkisiz erişim 403 (`/admin-check` testiyle kanıtlandı)
+- [x] Parolalar BCrypt ile hashlenmiş saklanıyor
+- [x] Angular login akışı + token saklama (localStorage) + korumalı route (authGuard) + interceptor (Bearer + 401'de refresh/logout) — `npm run build` ✅
+- [x] Geçersiz/expired token → 401, tutarlı `{error, message}` formatı
 
 ## Alt Görevler
-- [ ] User entity'ye parola hash, rol, aktiflik alanları ekle
-- [ ] Spring Security config (filter chain, JWT filter, password encoder)
-- [ ] JWT üretme/doğrulama servisi (access + refresh)
-- [ ] Login/refresh/me endpoint'leri
-- [ ] Rol bazlı erişim kuralları (method security)
-- [ ] Angular: login sayfası, auth service, HttpInterceptor (token ekleme + 401'de logout)
-- [ ] İlk admin kullanıcısını seed et
+- [x] AppUser'a `password_hash` alanı eklendi (Flyway V3)
+- [x] Spring Security config (stateless filter chain, JWT filter, BCrypt encoder)
+- [x] JwtService (HS256 access JWT + opaque refresh, SHA-256 hash ile DB'de)
+- [x] Login/refresh/logout/me endpoint'leri (`AuthController`)
+- [x] Rol bazlı erişim (method security + örnek `/admin-check`)
+- [x] Angular: login sayfası, auth service, HttpInterceptor
+- [x] İlk admin kullanıcısı seed (V3) — `admin@e-commint.com`
 
 ## Teknik Notlar
 - accounting@e-commint.com kurumsal mail; ileride Google SSO entegrasyonu düşünülebilir ama MVP için email+parola yeterli
@@ -44,7 +44,18 @@ Spring Security + JWT kullanılacak. Mobil de aynı REST API'yi tüketeceği iç
 - Refresh token DB'de saklanıp iptal edilebilir olmalı (logout / güvenlik)
 - account-hr "hr" eki ileride personel modülü ima ediyor olabilir; rol modeli genişletilebilir tasarlanmalı (rol tablosu vs enum kararı)
 
-## Açık Sorular / Riskler
-- Google SSO MVP'ye girecek mi? (Öneri: hayır, faz 2)
-- Dış mali müşavir gerçek kullanıcı mı yoksa sadece "ilet" hedefi mi? Kullanıcı hesabı mı açılacak yoksa sadece mail mi atılacak netleştirilmeli
-- Rol enum mu tablo mu? (account-hr büyüyecekse tablo daha esnek)
+## Açık Sorular / Riskler — KARARA BAĞLANDI
+- ~~Google SSO MVP'ye?~~ → **Hayır, faz 2**. MVP email+parola.
+- Dış mali müşavir kullanıcı mı? → **Açık** (auth'u etkilemiyor; gerekirse ROLE_ACCOUNTING ile hesap açılır, aksi halde sadece mail hedefi). E6/E7'de netleşecek.
+- ~~Rol enum mu tablo mu?~~ → **Enum** (`UserRole`, mevcut). Büyürse tabloya geçiş ileriye bırakıldı.
+
+## Tamamlanma Kaydı
+- **Durum:** ✅ Tamamlandı (canlı login + Postgres doğrulaması hariç) — 2026-06-25
+- **YouTrack:** IK-227 (sıralı varsayım — teyit edilecek)
+- **Repolar:** account-hr (backend) + account-hr-frontend (Angular)
+- **Backend:** JWT (JJWT 0.12.6), Spring Security stateless, BCrypt, refresh token DB'de SHA-256 hash + rotate + revoke, 401/403 `{error,message}`, method security
+- **Frontend:** auth service/interceptor/guard + login sayfası (AwesomeDesign) + topbar kullanıcı/çıkış
+- **Seed admin:** `admin@e-commint.com` / `changeme123` (ilk girişte değiştir — BCrypt hash V3'te)
+- **Doğrulananlar:** backend `./mvnw test` ✅ **12/12** (7 auth akışı dahil) · frontend `npm run build` ✅
+- **Kalan iş:** canlı login round-trip (Angular→API, Postgres) Docker'lı ortamda; V3 migration Postgres'te `ddl-auto=validate` ile teyit
+- **Sapmalar:** logout permitAll (refresh-token gövdeli çağrı); refresh = opaque token (JWT değil — iptal edilebilirlik için)

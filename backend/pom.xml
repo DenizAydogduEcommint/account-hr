@@ -57,6 +57,26 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- JJWT (JSON Web Token) — access/refresh token üretimi ve doğrulaması.
+		     api derleme zamanı; impl + jackson yalnızca runtime. -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>0.12.6</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>0.12.6</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>0.12.6</version>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- Flyway: şema migrasyonlarını yönetir (PostgreSQL hedefli).
 		     Sürümler Spring Boot 3.5 BOM tarafından yönetilir. -->
 		<dependency>

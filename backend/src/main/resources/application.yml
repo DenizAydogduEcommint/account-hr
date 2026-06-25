@@ -7,6 +7,16 @@ spring:
 server:
   port: 8080
 
+# JWT ayarları (E1-03). Secret ve süreler env'den gelir; dev için varsayılanlar
+# verilir. Secret HS256 için en az 32 byte olmalı. PROD'da APP_JWT_SECRET zorunlu.
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:dev-only-change-me-jwt-secret-min-32-bytes-long-0123456789}
+    # Access token ömrü: 15 dakika (saniye).
+    access-ttl: ${APP_JWT_ACCESS_TTL:900}
+    # Refresh token ömrü: 7 gün (saniye).
+    refresh-ttl: ${APP_JWT_REFRESH_TTL:604800}
+
 management:
   endpoints:
     web:

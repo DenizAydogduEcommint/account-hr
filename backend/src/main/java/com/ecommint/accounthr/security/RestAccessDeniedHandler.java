@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
+import com.ecommint.accounthr.dto.ErrorResponses;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,7 +16,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Kimliği doğrulanmış ama yetkisi yetersiz kullanıcıya 403 döner.
- * Gövde projenin standart hata formatı: {"error":...,"message":...}.
+ * Gövde projenin standart hata formatıdır ({@code ErrorResponse}); traceId MDC'den
+ * ({@code correlationId}) okunur.
  */
 @Component
 public class RestAccessDeniedHandler implements AccessDeniedHandler {
@@ -31,8 +33,10 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
             AccessDeniedException accessDeniedException) throws IOException {
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), java.util.Map.of(
-                "error", "FORBIDDEN",
-                "message", "Bu işlem için yetkiniz yok."));
+        objectMapper.writeValue(response.getWriter(), ErrorResponses.of(
+                HttpStatus.FORBIDDEN.value(),
+                "FORBIDDEN",
+                "You do not have permission to perform this action.",
+                request.getRequestURI()));
     }
 }

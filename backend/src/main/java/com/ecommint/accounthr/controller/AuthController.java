@@ -23,7 +23,7 @@ import jakarta.validation.Valid;
  * 401 entry point ve 403 access denied handler).
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
     private final AuthService authService;
@@ -32,26 +32,26 @@ public class AuthController {
         this.authService = authService;
     }
 
-    /** POST /api/auth/login → 200 access + refresh + user; hatalı kimlik → 401. */
+    /** POST /api/v1/auth/login → 200 access + refresh + user; hatalı kimlik → 401. */
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request.email(), request.password());
     }
 
-    /** POST /api/auth/refresh → 200 yeni access + rotate edilmiş refresh; geçersiz → 401. */
+    /** POST /api/v1/auth/refresh → 200 yeni access + rotate edilmiş refresh; geçersiz → 401. */
     @PostMapping("/refresh")
     public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request.refreshToken());
     }
 
-    /** POST /api/auth/logout → 204; verilen refresh token iptal edilir. */
+    /** POST /api/v1/auth/logout → 204; verilen refresh token iptal edilir. */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
         authService.logout(request.refreshToken());
         return ResponseEntity.noContent().build();
     }
 
-    /** GET /api/auth/me → 200 mevcut kullanıcı; token yoksa/geçersizse → 401. */
+    /** GET /api/v1/auth/me → 200 mevcut kullanıcı; token yoksa/geçersizse → 401. */
     @GetMapping("/me")
     public UserResponse me(Authentication authentication) {
         return authService.me(authentication.getName());

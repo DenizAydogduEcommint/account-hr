@@ -20,9 +20,10 @@ import com.ecommint.accounthr.security.RestAuthenticationEntryPoint;
  * Stateless JWT güvenlik yapılandırması (E1-03).
  *
  * - Session yok (STATELESS), CSRF kapalı (REST + bearer token).
- * - permitAll: /api/auth/login, /api/auth/refresh, /api/auth/logout, /api/health,
- *   /actuator/health. logout refresh token gövdesiyle iptal eder (access token
- *   gerektirmez). Diğer her şey authenticated().
+ * - permitAll: /api/v1/auth/login, /api/v1/auth/refresh, /api/v1/auth/logout,
+ *   /api/v1/health, /actuator/health ve Swagger/OpenAPI yolları
+ *   (/swagger-ui/**, /swagger-ui.html, /v3/api-docs/**). logout refresh token
+ *   gövdesiyle iptal eder (access token gerektirmez). Diğer her şey authenticated().
  * - JwtAuthenticationFilter, UsernamePasswordAuthenticationFilter'dan önce çalışır.
  * - 401 (kimlik yok/geçersiz) ve 403 (yetki yok) için {error,message} JSON döndüren
  *   entry point / access denied handler.
@@ -52,12 +53,15 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/api/auth/login",
-                    "/api/auth/refresh",
-                    "/api/auth/logout",
-                    "/api/health",
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/logout",
+                    "/api/v1/health",
                     "/actuator/health",
-                    "/actuator/health/**").permitAll()
+                    "/actuator/health/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

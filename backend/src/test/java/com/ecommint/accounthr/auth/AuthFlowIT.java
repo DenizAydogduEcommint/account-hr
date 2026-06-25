@@ -69,7 +69,7 @@ class AuthFlowIT {
     @SuppressWarnings("unchecked")
     private Map<String, Object> login(String email, String password) {
         ResponseEntity<Map> resp = rest.postForEntity(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 Map.of("email", email, "password", password),
                 Map.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -107,7 +107,7 @@ class AuthFlowIT {
     @SuppressWarnings("rawtypes")
     void loginWithWrongPasswordReturns401() {
         ResponseEntity<Map> resp = rest.postForEntity(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 Map.of("email", adminEmail, "password", "wrong"),
                 Map.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -122,7 +122,7 @@ class AuthFlowIT {
         String access = (String) login(adminEmail, PASSWORD).get("accessToken");
 
         ResponseEntity<Map> resp = rest.exchange(
-                "/api/auth/me", HttpMethod.GET,
+                "/api/v1/auth/me", HttpMethod.GET,
                 new HttpEntity<>(bearer(access)), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -134,7 +134,7 @@ class AuthFlowIT {
     @Test
     @SuppressWarnings("rawtypes")
     void protectedEndpointWithoutTokenReturns401() {
-        ResponseEntity<Map> resp = rest.getForEntity("/api/auth/me", Map.class);
+        ResponseEntity<Map> resp = rest.getForEntity("/api/v1/auth/me", Map.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(resp.getBody().get("error")).isEqualTo("UNAUTHORIZED");
     }
@@ -147,7 +147,7 @@ class AuthFlowIT {
         String oldRefresh = (String) first.get("refreshToken");
 
         ResponseEntity<Map> refreshResp = rest.postForEntity(
-                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+                "/api/v1/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
         assertThat(refreshResp.getStatusCode()).isEqualTo(HttpStatus.OK);
         String newRefresh = (String) refreshResp.getBody().get("refreshToken");
         assertThat(newRefresh).isNotBlank().isNotEqualTo(oldRefresh);
@@ -155,7 +155,7 @@ class AuthFlowIT {
 
         // Eski refresh (artık iptal edilmiş) → 401
         ResponseEntity<Map> reuse = rest.postForEntity(
-                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+                "/api/v1/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
         assertThat(reuse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(reuse.getBody().get("error")).isEqualTo("UNAUTHORIZED");
     }
@@ -174,12 +174,12 @@ class AuthFlowIT {
 
         // İlk refresh: token'ı rotate eder (atomik iptal eder) → 200.
         ResponseEntity<Map> ok = rest.postForEntity(
-                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+                "/api/v1/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
         assertThat(ok.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         // Aynı eski token ile ikinci refresh → 401 (revokeIfActive 0 satır günceller).
         ResponseEntity<Map> second = rest.postForEntity(
-                "/api/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
+                "/api/v1/auth/refresh", Map.of("refreshToken", oldRefresh), Map.class);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(second.getBody().get("error")).isEqualTo("UNAUTHORIZED");
     }
@@ -191,11 +191,11 @@ class AuthFlowIT {
         String refresh = (String) login(adminEmail, PASSWORD).get("refreshToken");
 
         ResponseEntity<Void> logoutResp = rest.postForEntity(
-                "/api/auth/logout", Map.of("refreshToken", refresh), Void.class);
+                "/api/v1/auth/logout", Map.of("refreshToken", refresh), Void.class);
         assertThat(logoutResp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
         ResponseEntity<Map> afterLogout = rest.postForEntity(
-                "/api/auth/refresh", Map.of("refreshToken", refresh), Map.class);
+                "/api/v1/auth/refresh", Map.of("refreshToken", refresh), Map.class);
         assertThat(afterLogout.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
@@ -206,7 +206,7 @@ class AuthFlowIT {
         String memberAccess = (String) login(memberEmail, PASSWORD).get("accessToken");
 
         ResponseEntity<Map> resp = rest.exchange(
-                "/api/auth/admin-check", HttpMethod.GET,
+                "/api/v1/auth/admin-check", HttpMethod.GET,
                 new HttpEntity<>(bearer(memberAccess)), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -215,7 +215,7 @@ class AuthFlowIT {
         // ADMIN aynı uca erişebilmeli → 200
         String adminAccess = (String) login(adminEmail, PASSWORD).get("accessToken");
         ResponseEntity<Map> ok = rest.exchange(
-                "/api/auth/admin-check", HttpMethod.GET,
+                "/api/v1/auth/admin-check", HttpMethod.GET,
                 new HttpEntity<>(bearer(adminAccess)), Map.class);
         assertThat(ok.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(ok.getBody().get("ok")).isEqualTo(true);

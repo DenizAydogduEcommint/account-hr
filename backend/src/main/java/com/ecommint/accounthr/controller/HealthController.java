@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  * /actuator/health (which also checks the DB).
  */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 public class HealthController {
 
 	@GetMapping("/health")

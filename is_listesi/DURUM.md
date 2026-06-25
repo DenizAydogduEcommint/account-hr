@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 5 / 52 tamamlandı · **MVP = E1 + E2 + E3**
+**Özet:** 6 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 epic esas olarak bitti** (yalnız E1-06 CD/staging ertelendi) · **MVP = E1 + E2 + E3**
 
 **Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Ayrıca **frontend tarayıcı (Playwright) testi**: authGuard yönlendirme → admin login → dashboard "API: UP" (Angular→backend uçtan uca) → Çıkış → login; console 0 hata. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
 
@@ -20,7 +20,7 @@
 | E1-04 | Dosya depolama servisi | ✅ | IK-228. StorageService, slugify, dedup, waiting/trash. V4+storage root PG14'te doğrulandı |
 | E1-05 | Config, secret, loglama, audit | ✅ | IK-229. AES-GCM credential şifreleme, JSON log, Hibernate audit, maskeleme. PG14 V5+validate doğrulandı |
 | E1-06 | CI/CD & dağıtım | 🔄 | IK-230. CI tamam (GitHub Actions test/build + GHCR image, actionlint 0 hata). CD/staging ertelendi (deploy hedefi bekliyor) |
-| E1-07 | API tasarım standartları | ⬜ | Sıradaki |
+| E1-07 | API tasarım standartları | ✅ | IK-231. /api/v1 + ErrorResponse(traceId) + Swagger + PagedResponse + örnek /services. PG14'te canlı doğrulandı |
 
 ## E2 — Veri Migrasyonu
 | Görev | Başlık | Durum | Not |

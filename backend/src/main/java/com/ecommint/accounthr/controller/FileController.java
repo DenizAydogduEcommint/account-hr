@@ -39,7 +39,7 @@ import com.ecommint.accounthr.service.storage.StorageService;
  * {@code files} tablosuna işlenir.
  */
 @RestController
-@RequestMapping("/api/files")
+@RequestMapping("/api/v1/files")
 public class FileController {
 
     private final StorageService storageService;

@@ -28,7 +28,7 @@ class HealthControllerIT {
 	@Test
 	@SuppressWarnings("rawtypes")
 	void healthEndpointReturnsUp() {
-		ResponseEntity<Map> response = restTemplate.getForEntity("/api/health", Map.class);
+		ResponseEntity<Map> response = restTemplate.getForEntity("/api/v1/health", Map.class);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isNotNull();

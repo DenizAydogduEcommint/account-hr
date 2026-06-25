@@ -270,11 +270,10 @@ public class ExcelImportService {
     }
 
     private boolean isSectionHeaderLabel(String label) {
-        if (label == null) {
-            return false;
-        }
-        String l = label.trim();
-        return l.startsWith("Multinet Yemek Kartı") || l.startsWith("Sağlık Sigortası");
+        // Tek kaynak: importer (E2-01) ve reconciler (E2-05) AYNI eşleme kuralını kullanır,
+        // böylece reconciler importer'la aynı satırları bilgi-amaçlı sayar (sahte MISMATCH
+        // riski yok). Bkz. {@link SectionHeaderText}.
+        return SectionHeaderText.isSectionHeaderLabel(label);
     }
 
     private boolean isRowEmpty(Row row, DataFormatter dataFormatter) {

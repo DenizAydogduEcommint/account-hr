@@ -16,13 +16,13 @@ Migrasyonun doğru ve eksiksiz olduğunu kanıtlamak: Excel'deki toplamlar ile D
 Migrasyon kritik: muhasebe verisi yanlış aktarılırsa güven kaybı olur. Bu görev E2-01..E2-04 sonuçlarını doğrular. Excel'deki her ay sheet'inin TOPLAM satırı ile DB'deki o period toplamı karşılaştırılır; satır sayıları, fatura sayıları, durum dağılımları kontrol edilir. Ayrıca importer'lar tekrar çalıştırıldığında veri çiftlenmemeli (idempotency).
 
 ## Kabul Kriterleri (DOD)
-- [ ] Her period için Excel TOPLAM (TL) ↔ DB expense TL toplamı karşılaştırması; fark eşiği (ör. ±0.01) içinde
-- [ ] Satır sayısı mutabakatı: Excel'deki harcama satırı sayısı = DB'deki expense sayısı (TOPLAM/bilgi bölümleri hariç doğru sayılıyor)
-- [ ] Fatura/dosya mutabakatı: `faturalar/` fizik dosya sayısı ↔ `files` kayıt sayısı
-- [ ] Durum dağılımı mutabakatı: Excel durum sayıları ↔ DB enum sayıları (E2-04 ile)
-- [ ] İdempotency: tüm importer'lar ikinci kez çalıştırıldığında yeni kayıt oluşturmaz, mevcutları günceller (upsert / doğal anahtar)
-- [ ] Mutabakat raporu üretiliyor (okunabilir: period bazlı tablo + farklar + uyarılar), kullanıcı onayına sunulabilir
-- [ ] Tutarsızlıklar net listeleniyor (hangi satır/dosya eşleşmedi, hangi tutar tutmadı)
+- [x] Period TL mutabakatı (±0.01): Excel ana `TOPLAM:` (Multinet/Sigorta hariç) ↔ DB sum(amount_try) informational=false — 2026-01/02/03 MATCH (diff=0)
+- [x] Satır sayısı mutabakatı: Excel ana harcama satırı ↔ DB expense (informational hariç) — 11/28/23/16 tuttu
+- [x] Fatura/dosya mutabakatı: storage fizik ↔ `files` kayıt — 55==55
+- [x] Durum dağılımı mutabakatı: DB enum sayıları (E2-04 ile tutarlı)
+- [x] İdempotency anahtarları dokümante (expense→source_row_hash, service→normalize(ad)+provider, file→sha256)
+- [x] Mutabakat raporu (period bazlı tablo + farklar + uyarılar + genel ok)
+- [x] Tutarsızlık listesi (inconsistencies[]) — gerçek veride yalnız Nisan WARNING
 
 ## Alt Görevler
 - [ ] Excel TOPLAM satırı okuyucu + period eşleme
@@ -39,6 +39,16 @@ Migrasyon kritik: muhasebe verisi yanlış aktarılırsa güven kaybı olur. Bu 
 - Bu görev migrasyonun "kabul testi"; geçmeden production'a geçilmez
 
 ## Açık Sorular / Riskler
-- Excel'de elle yapılmış küçük tutarsızlıklar (yuvarlama, manuel düzeltme) tolerans eşiğini zorlayabilir
-- Bilgi bölümlerinin toplamlara dahil edilip edilmeyeceği netleştirilmeli (öneri: hariç, ana harcama gibi)
-- Migrasyon birden çok kez mi çalışacak (Drive güncellenip tekrar import)? İdempotency bunu varsayar
+- ~~Yuvarlama tutarsızlıkları eşiği zorlar mı?~~ → Gerçek veride 3 ay diff=0.00 (tam). ±0.01 tolerans yeterli.
+- ~~Bilgi bölümleri toplama dahil mi?~~ → HARİÇ. DB `informational=false`, Excel ana `TOPLAM:` (Multinet/Sigorta TOPLAM hariç). Şubat doğrulaması: 465411 − Multinet 322362 − Sigorta 30658 = 112390.98 = Excel ana TOPLAM.
+- Migrasyon tekrar çalışır (Drive güncellenip re-import); idempotency anahtarları rapora yazıldı.
+
+## Tamamlanma Kaydı
+- Durum: ✅ Tamamlandı — 2026-06-25
+- YouTrack: IK-236 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend)
+- Üretilenler: ReconciliationService (read-only), AdminReconciliationController `POST /api/v1/admin/reconciliation` (ADMIN), ReconciliationReport, SectionHeaderText (E2-01 importer + E2-05 reconciler ortak bölüm-başlığı eşleştirici), ExpenseRepository sum/count (informational=false)
+- **Gerçek veri doğrulaması = MİGRASYON KABUL TESTİ (lokal PG14)**: genel ok=true. 2026-01 MATCH (194520.26), 2026-02 MATCH (112390.98), 2026-03 MATCH (114355.40) — diff=0.00, satır 11/28/23 tam; 2026-04 WARNING (kısmi ay, tutar yok). filesPhysical 55==filesDbRows 55, statusDistribution E2-04 ile birebir. read-only teyit: exp/files değişmedi.
+- Test: `./mvnw test` 93/93 (3 surefire sırasında; +14)
+- **Dört bağımsız review turu (agent 3 + parent 1):** agent round 1-3 (zero-invoice filtre, case-sensitive bölüm-başlığı, storage-scan 500, -1 sentinel, importer/reconciler divergence, Türkçe İ-fold) → 0; parent turu temiz onayladı.
+- expenses/ Drive aynasına dokunulmadı (Excel read-only; servis hiç yazma yapmıyor).

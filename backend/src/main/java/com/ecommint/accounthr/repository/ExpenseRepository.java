@@ -31,4 +31,34 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     @Query("SELECT s.id FROM Service s WHERE NOT EXISTS "
             + "(SELECT 1 FROM Expense e WHERE e.service = s)")
     List<Long> findServiceIdsWithoutExpenses();
+
+    /**
+     * E2-05 — Period bazlı ANA harcama TL toplamı (Excel TOPLAM mutabakatı için).
+     *
+     * <p>Mutabakat kuralı (CLAUDE.md: "TOPLAM sadece ana harcamalar"): Excel'in ana
+     * {@code TOPLAM:} satırı bilgi-amaçlı (Multinet/Sigorta) kalemleri İÇERMEZ. Bu yüzden
+     * DB toplamı da bilgi-amaçlı expense'leri HARİÇ tutar. Filtre {@code e.informational}
+     * bayrağı üzerinden yapılır — bu bayrak E2-01'de Multinet/Sağlık Sigortası bölüm
+     * başlığından sonra gelen satırlara {@code true} olarak set edilir (ve aynı satırların
+     * invoice'u IGNORED olur). {@code informational} doğrudan domain bayrağı olduğundan
+     * invoice varlığına BAĞLI DEĞİLDİR: invoice'u olmayan (ör. kısmi import) bir ana
+     * expense yanlışlıkla dahil edilmez, bir bilgi-expense'i invoice'suz kalsa bile doğru
+     * biçimde HARİÇ tutulur.
+     *
+     * <p>{@code amount_try} NULL olan satırlar (ör. Nisan, kısmi ay) toplama katkı vermez
+     * (SUM NULL'ları atlar) ve hiç uygun satır yoksa SUM {@code null} döner.
+     *
+     * @return ana harcama {@code amount_try} toplamı; hiç uygun satır yoksa {@code null}.
+     */
+    @Query("SELECT SUM(e.amountTry) FROM Expense e "
+            + "WHERE e.period.id = :periodId AND e.informational = false")
+    java.math.BigDecimal sumMainAmountTryByPeriod(@org.springframework.data.repository.query.Param("periodId") Long periodId);
+
+    /**
+     * E2-05 — Period bazlı ANA harcama satır sayısı (Excel satır mutabakatı için).
+     * Bilgi-amaçlı ({@code informational = true}, Multinet/Sigorta) expense'ler hariç sayılır.
+     */
+    @Query("SELECT COUNT(e) FROM Expense e "
+            + "WHERE e.period.id = :periodId AND e.informational = false")
+    long countMainExpensesByPeriod(@org.springframework.data.repository.query.Param("periodId") Long periodId);
 }

@@ -37,6 +37,24 @@ app:
   # DEĞİLDİR; bu bir env override'ıdır).
   import:
     invoice-files-source-dir: ${INVOICE_FILES_SOURCE_DIR:${user.home}/Dev/expenses/faturalar}
+  # Google Drive waiting/ senkron köprüsü (E2-06). rclone subprocess ile çalışır.
+  # GÜVENLİ KAPALI: enabled varsayılan false — env (APP_DRIVE_ENABLED=true) ile açılır.
+  # Yalnızca İKİ Drive işlemi: waiting/ pull (remote→local) ve waiting/'den dosya silme.
+  # Lokal dosya Drive'a ASLA push edilmez (koda gömülü kural). Drive OAuth token'ı
+  # rclone'un kendi rclone.conf'unda tutulur; backend token'ları ELLEMEZ — sahip
+  # olduğumuz tek ayar remote adı/yollar/binary'dir. Hiçbir değer koda gömülü DEĞİL.
+  drive:
+    enabled: ${APP_DRIVE_ENABLED:false}
+    remote-name: ${APP_DRIVE_REMOTE_NAME:gdrive-ecommint}
+    root-folder-id: ${APP_DRIVE_ROOT_FOLDER_ID:}
+    waiting-remote-path: ${APP_DRIVE_WAITING_REMOTE_PATH:faturalar/waiting}
+    # Boş bırakılırsa storage kökü altındaki waiting/ kullanılır (E1-04 ile aynı dizin).
+    local-waiting-dir: ${APP_DRIVE_LOCAL_WAITING_DIR:}
+    rclone-binary: ${APP_DRIVE_RCLONE_BINARY:rclone}
+    timeout-seconds: ${APP_DRIVE_TIMEOUT_SECONDS:120}
+    # Zamanlanmış otomatik pull — bu görevde @Scheduled job YOK; ileride eklenirse
+    # bu bayrak (varsayılan false) ile @ConditionalOnProperty altında korunacak.
+    scheduled-enabled: ${APP_DRIVE_SCHEDULED_ENABLED:false}
   # Credential şifreleme (E1-05). master-key, servis panel parolaları/API key'leri
   # AES-256-GCM ile şifrelemek için kullanılır. CREDENTIAL_MASTER_KEY env'inden gelir;
   # base64 kodlu 256-bit (32 byte) olmalı. REPODA VARSAYILAN YOK — local/test profilleri

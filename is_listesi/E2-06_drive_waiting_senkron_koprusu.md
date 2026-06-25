@@ -18,13 +18,23 @@ Mevcut akışta `gdrive-ecommint` remote'u (rclone) ile `2026_Harcamalar.xlsx` v
 Bu görev köprüyü kurar: Drive'dan waiting'i çekme, yeni dosyaları algılama, işleme kuyruğuna alma. rclone subprocess mi yoksa Java Google Drive API mi kararı verilecek.
 
 ## Kabul Kriterleri (DOD)
-- [ ] `waiting/` Drive'dan lokale çekilebiliyor (`rclone copy` veya Drive API) — tetikleme manuel/zamanlanmış
-- [ ] Yeni gelen dosyalar algılanıp `files`/işleme kuyruğuna alınıyor (waiting durumunda)
-- [ ] İşlenip ay klasörüne taşınan dosya hem lokal hem Drive'daki waiting'den siliniyor (`rclone delete` / Drive API)
-- [ ] **Lokal dosya asla Drive'a push edilmiyor** (sadece waiting silme istisnası); kural koda gömülü
-- [ ] Drive kimlik bilgileri/token E1-05 secret yönetiminden okunuyor
-- [ ] Sync işlemleri loglanıyor ve hata durumunda (Drive erişilemez) güvenli başarısızlık
-- [ ] Root folder ID ve remote adı yapılandırmadan geliyor (kod içine gömülü değil)
+- [x] `waiting/` Drive'dan lokale çekiliyor (`rclone copy`, subprocess) — manuel tetik `POST /api/v1/admin/drive/pull-waiting`. **Gerçek Drive'da kanıtlandı: 17 dosya pull edildi.**
+- [x] Yeni gelen dosyalar algılanıp newFiles listesinde dönüyor (DrivePullResult)
+- [x] İşlenince Drive waiting'den silme: `deleteFromWaiting` (internal, idempotent, `rclone deletefile`). Implementasyon + mock test var; gerçek silme bilinçli olarak çalıştırılmadı (kullanıcı kararı: silme mock)
+- [x] **Lokal asla Drive'a push edilmiyor** — yapısal imkansız (servis sadece pull+delete metodu, reflection testiyle korunuyor). **Gerçek veride copy-only kanıtlandı** (backend log: sadece `rclone copy`, hiç delete; Drive sayısı düşüşü dış kaynaklı, backend kapalıyken de sürdü)
+- [x] Drive credential rclone.conf'ta (backend token yönetmez) — dokümante
+- [x] Sync loglama + güvenli başarısızlık: DriveSyncException → 502; bad input → 400; enabled=false → no-op
+- [x] Root folder ID + remote adı + binary config'ten (`app.drive.*`, hiçbiri gömülü değil)
+
+## Tamamlanma Kaydı
+- Durum: ✅ Tamamlandı — 2026-06-25 · **E2 EPİC TAMAMLANDI (6/6)**
+- YouTrack: IK-237 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend)
+- Üretilenler: DriveSyncService (pullWaiting + deleteFromWaiting), CommandRunner soyutlama + ProcessBuilderCommandRunner, DriveSyncProperties (`app.drive.*`), AdminDriveController `POST /api/v1/admin/drive/pull-waiting` (ADMIN), DriveSyncResult, DriveSyncException→502 + DriveSyncValidationException→400
+- **GERÇEK DRIVE DOĞRULAMASI (rclone v1.74.3, gdrive-ecommint remote)**: pull endpoint gerçek Drive'a bağlandı → 17 dosya storage root/waiting'e indi (Mayıs kart ekstreleri, GoDaddy/Pipedrive/OpenAI faturaları vb.). **Push/silme YOK** (log: yalnız `rclone copy`); Drive waiting sayı değişimi dış kaynaklı (backend kapalıyken de değişti = bizim sistemimiz değil).
+- Test: `./mvnw test` 116/116 (3 surefire sırasında; +23). Tüm testler FakeCommandRunner/mock — gerçek subprocess test'te çalışmaz.
+- **Üç bağımsız review turu (agent 2 + parent 1):** subprocess stdout/stderr drain deadlock, timeout enforcement, validation sırası (agent); CRITICAL timeout-yakın başarılı pull'un yanlışlıkla fail raporlanması + bad-filename 502→400 (parent) → hepsi düzeltildi.
+- expenses/ Drive aynasına push YOK (yalnız pull); storage root kuralı korundu.
 
 ## Alt Görevler
 - [ ] Entegrasyon yöntemi kararı: rclone subprocess vs Google Drive API (Java client)

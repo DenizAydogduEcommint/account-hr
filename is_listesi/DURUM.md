@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 11 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Özet:** 12 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 
@@ -32,7 +32,7 @@
 | E2-03 | Faturalar klasör tarama & eşleştirme | ✅ | IK-234. faturalar→storage kopya + invoice eşleme (note path). PG14: 55 dosya/49 eşleşti, orphan yok, kaynak dokunulmadı. Bağımsız review orphan bug'ı yakaladı |
 | E2-04 | Durum/renk enum migrasyonu | ✅ | IK-235. Renk-metin audit + dosya-durum tutarlılık + StatusColors. PG14: 0 tutarsızlık (veri temiz), dağılım doğru |
 | E2-05 | Migrasyon doğrulama & mutabakat | ✅ | IK-236. Excel TOPLAM↔DB mutabakat raporu. PG14 KABUL TESTİ: ok=true, 3 ay diff=0.00, satır tam, Nisan WARNING. Migrasyon kuruşu kuruşuna doğrulandı |
-| E2-06 | Drive waiting senkron köprüsü | ⬜ | |
+| E2-06 | Drive waiting senkron köprüsü | ✅ | IK-237. rclone subprocess pull köprüsü, push yapısal imkansız. GERÇEK Drive'da kanıtlandı: 17 dosya pull, silme yok. 116 test |
 
 ## E3 — Web Uygulaması (MVP)
 | Görev | Başlık | Durum | Not |

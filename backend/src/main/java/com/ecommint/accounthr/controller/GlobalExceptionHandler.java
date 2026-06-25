@@ -16,6 +16,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.drive.DriveSyncException;
+import com.ecommint.accounthr.service.drive.DriveSyncValidationException;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
 import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
@@ -37,6 +39,8 @@ import jakarta.validation.ConstraintViolationException;
  *   <li>{@code DuplicateFileException} → 409 DUPLICATE_FILE</li>
  *   <li>{@code StoragePathTraversalException} → 400 INVALID_PATH</li>
  *   <li>{@code StorageException} → 400 STORAGE_ERROR</li>
+ *   <li>{@code DriveSyncValidationException} → 400 DRIVE_REQUEST_INVALID (çağıran girdisi: geçersiz dosya adı)</li>
+ *   <li>{@code DriveSyncException} → 502 DRIVE_SYNC_ERROR (dış bağımlılık: rclone/Drive)</li>
  *   <li>{@code NoResourceFoundException} → 404 NOT_FOUND</li>
  *   <li>diğer her şey → 500 INTERNAL_ERROR (stack/secret SIZDIRMAZ)</li>
  * </ul>
@@ -127,6 +131,28 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvoiceFileImport(
             InvoiceFileImportException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "IMPORT_ERROR", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Drive senkron köprüsü ÇAĞIRAN GİRDİSİ hatası (E2-06): geçersiz/traversal dosya adı
+     * → 400 BAD_REQUEST. Bu bir dış bağımlılık (rclone/Drive) hatası DEĞİLDİR, dolayısıyla
+     * 502 olamaz. {@link DriveSyncException}'ın alt sınıfıdır; Spring en özgül handler'ı
+     * seçtiği için bu 400 eşlemesi aşağıdaki 502 eşlemesinden ÖNCE eşleşir.
+     */
+    @ExceptionHandler(DriveSyncValidationException.class)
+    public ResponseEntity<ErrorResponse> handleDriveSyncValidation(
+            DriveSyncValidationException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "DRIVE_REQUEST_INVALID", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Drive {@code waiting/} senkron köprüsü (E2-06) hatası: rclone yok/başarısız/zaman
+     * aşımı veya Drive erişilemez → 502 BAD_GATEWAY. Bir dış bağımlılık (rclone/Drive)
+     * sorunudur; uygulamanın kendi 500 hatası DEĞİLDİR. Ham stderr/stack mesaja konmaz.
+     */
+    @ExceptionHandler(DriveSyncException.class)
+    public ResponseEntity<ErrorResponse> handleDriveSync(DriveSyncException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, "DRIVE_SYNC_ERROR", ex.getMessage(), request, null);
     }
 
     /** Bilinmeyen rota / statik kaynak yok → 404 NOT_FOUND. */

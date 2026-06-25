@@ -17,6 +17,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
+import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StoragePathTraversalException;
@@ -113,6 +114,18 @@ public class GlobalExceptionHandler {
     /** Excel import hatası (okuma/parse) → 400 BAD_REQUEST. */
     @ExceptionHandler(ExcelImportException.class)
     public ResponseEntity<ErrorResponse> handleExcelImport(ExcelImportException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "IMPORT_ERROR", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Fatura dosyası tarama/kopyalama hatası (E2-03): caller/validation hataları
+     * (sourceDir izinli kök dışı, dizin değil) ve I/O hataları → 400 BAD_REQUEST.
+     * {@link ExcelImportException} ile aynı {@code IMPORT_ERROR} şekli; aksi halde
+     * genel handler bunu 500'e çevirirdi.
+     */
+    @ExceptionHandler(InvoiceFileImportException.class)
+    public ResponseEntity<ErrorResponse> handleInvoiceFileImport(
+            InvoiceFileImportException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "IMPORT_ERROR", ex.getMessage(), request, null);
     }
 

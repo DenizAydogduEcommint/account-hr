@@ -18,15 +18,15 @@ Mevcut sistemde faturalar `faturalar/2026-01..2026-04/`, `waiting/`, `trash/` kl
 Eşleme ipuçları: dosya adı (`{hizmet}_{ay}.pdf`), bulunduğu ay klasörü, Excel'deki "Fatura Notu" path'i, tutar/tarih. Bir expense'e birden çok dosya (PDF + XML + statement) bağlanabilir. Duplicate'ler (aynı invoice no, receipt kopyaları) tespit edilip trash mantığına uygun işaretlenmeli.
 
 ## Kabul Kriterleri (DOD)
-- [ ] `faturalar/` ay klasörleri + waiting/ + trash/ recursive taranıyor
-- [ ] Her fizik dosya için `files` kaydı (path, tip PDF/XML/statement, boyut, hash)
-- [ ] Dosyalar uygun `invoice`/`expense` ile eşleniyor; eşleme öncelik sırası: Excel "Fatura Notu" path'i > dosya adı + ay klasörü > tutar/tarih
-- [ ] Bir expense'e birden çok dosya bağlanabiliyor (PDF+XML+statement aynı invoice altında)
-- [ ] Duplicate tespiti: aynı hash veya aynı invoice no → duplicate işaretlenir, biri tutulur (Invoice > Receipt)
-- [ ] Eşleşmeyen dosyalar "unmatched" olarak raporlanır (waiting/trash konumu korunur)
-- [ ] **Mevcut Ocak/Şubat/Mart klasör yerleşimi DEĞİŞTİRİLMEZ** (eski ödeme-ayı kuralı; geriye dönük taşıma yok)
-- [ ] DB'deki path'ler gerçek dosya konumlarıyla bire bir tutuyor (E1-04 storage servisi üzerinden)
-- [ ] Özet rapor: taranan dosya, eşleşen, eşleşmeyen, duplicate sayıları
+- [x] `faturalar/` ay + waiting/ + trash/ recursive taranıyor (.DS_Store/dotfile atlanır)
+- [x] Her fizik dosya için `files` kaydı (path, tip PDF/XML/STATEMENT/RECEIPT, boyut, sha256)
+- [x] Eşleme önceliği: "Fatura Notu" path > base-isim türevi (statement/xml aynı invoice'a) > unmatched
+- [x] Bir expense'e birden çok dosya (PDF+XML+statement aynı invoice)
+- [x] Duplicate: aynı sha256 → tek kopya tutulur (orphan yok), trash → trashed/unmatched
+- [x] Eşleşmeyen "unmatched" raporlanır (konum korunur)
+- [x] **Mevcut yerleşim DEĞİŞTİRİLMEZ**: kaynak read-only, storage root'a aynı relative path ile kopyalanır (yeniden adlandırma yok)
+- [x] DB path'ler storage root'taki gerçek kopyayla birebir (copyPreservingPath, traversal-safe)
+- [x] Özet rapor: scanned/copied/matched/unmatched/trashed/duplicates + unmatchedFiles[]
 
 ## Alt Görevler
 - [ ] Klasör tarayıcı (recursive, ay klasörü + waiting + trash ayrımı)
@@ -44,6 +44,17 @@ Eşleme ipuçları: dosya adı (`{hizmet}_{ay}.pdf`), bulunduğu ay klasörü, E
 - E2-04 ile koordinasyon: dosya bulunan expense'lerin durumu "Bulundu"/"e-Fatura"ya çekilir
 
 ## Açık Sorular / Riskler
-- "Fatura Notu" path formatı tutarlı mı? Bazı satırlarda açıklama olabilir, path olmayabilir
-- e-Fatura (LeasePlan) ve XML dosyaları için eşleme kuralı PDF'ten farklı olabilir
-- waiting/ migrasyon anında dolu olabilir — bu içerik DB'ye "bekleyen" olarak mı girecek yoksa atlanacak mı? (Öneri: kaydet, unmatched işaretle)
+- ~~"Fatura Notu" path formatı?~~ → Tutarlı (`faturalar/2026-03/aws_mart.pdf`); 55/101 invoice'ta path var, normalize edilip eşlendi. Açıklama-only note'lar (path değil) reddediliyor.
+- ~~XML/statement eşleme?~~ → Base-isim türevi olarak aynı invoice'a (aws_mart.pdf + _statement + .xml).
+- waiting/ boş; doluysa unmatched kaydedilir.
+
+## Tamamlanma Kaydı
+- Durum: ✅ Tamamlandı — 2026-06-25
+- YouTrack: IK-234 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend)
+- Üretilenler: InvoiceFileImportService + AdminImportController `POST /api/v1/admin/imports/invoice-files` (ADMIN, sourceDir param confined), InvoiceFileImportSummary, StorageService.copyPreservingPath, ImportProperties, Flyway V8 (files.invoice_id nullable) + V9 (files.sha256 partial unique)
+- **Gerçek veri doğrulaması (lokal PG14)**: gerçek `faturalar/` → scanned=58, copied=55, **storage fiziksel 55 == files DB row 55 (ORPHAN YOK)**, matched=49, unmatched=6, duplicates=3. Idempotency: 2. import 0 yeni. **Kaynak (Drive aynası) byte-byte dokunulmadı** (59 dosya + mtime sabit). Bad sourceDir → 400.
+- Test: `./mvnw test` 69/69 (3 surefire sırasında)
+- **İki bağımsız review (kural gereği): (1) implementation agent self-review (hardcoded path, sha256 unique index, path confinement); (2) parent bağımsız review → orphan bug (content-duplicate fiziksel kopya ama DB row yok) + 500→400 yakalandı, ikisi de düzeltildi.** Bağımsız review değerini kanıtladı (agent self-review orphan'ı kaçırmıştı).
+- **Borç (V9):** `files.sha256` partial unique index, mevcut duplicate sha256 olan bir DB'de deploy'da fail edebilir. Lokal PG'de sorunsuz uygulandı + E1-04 zaten duplicate'i engelliyor. V9 değiştirilmedi (Flyway checksum). Prod deploy öncesi preflight (DURUM borç).
+- expenses/ Drive aynasına yazma/silme/taşıma YOK (sadece read).

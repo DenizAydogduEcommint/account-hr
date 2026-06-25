@@ -33,8 +33,12 @@ public class FileAsset {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "invoice_id", nullable = false)
+    /**
+     * Dosyanın bağlandığı invoice. Migrasyon modunda (E2-03) eşleşmeyen / trash'teki
+     * dosyalar invoice'a bağlanmaz → {@code null} olabilir.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invoice_id")
     private Invoice invoice;
 
     @Column(name = "file_path", nullable = false)

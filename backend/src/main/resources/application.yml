@@ -31,6 +31,12 @@ app:
   # NOT: expenses/faturalar (Drive aynası) ASLA bu servisle yönetilmez.
   storage:
     root: ${STORAGE_ROOT:${user.home}/account-hr-data/faturalar}
+  # Veri aktarımı (E2-03). faturalar/ klasör taramasının kaynak dizini (Drive aynası,
+  # READ-ONLY). INVOICE_FILES_SOURCE_DIR env'inden gelir; staging/prod'da env ile verilir.
+  # Geliştirici varsayılanı yalnızca lokal içindir (sabit bir geliştirici yolu repoda gömülü
+  # DEĞİLDİR; bu bir env override'ıdır).
+  import:
+    invoice-files-source-dir: ${INVOICE_FILES_SOURCE_DIR:${user.home}/Dev/expenses/faturalar}
   # Credential şifreleme (E1-05). master-key, servis panel parolaları/API key'leri
   # AES-256-GCM ile şifrelemek için kullanılır. CREDENTIAL_MASTER_KEY env'inden gelir;
   # base64 kodlu 256-bit (32 byte) olmalı. REPODA VARSAYILAN YOK — local/test profilleri

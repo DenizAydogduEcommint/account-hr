@@ -30,3 +30,8 @@ app:
   # testleri bunu @DynamicPropertySource ile JUnit @TempDir'e yönlendirir.
   storage:
     root: ${java.io.tmpdir}/account-hr-test-storage
+  # E2-03 import kaynağı testte güvenli bir temp varsayılana işaret eder (gerçek
+  # expenses/faturalar DEĞİL). Davranış testi kaynağı @TempDir ile servise doğrudan
+  # geçirir; bu değer yalnızca ImportProperties binding'inin boot'ta dolu olması içindir.
+  import:
+    invoice-files-source-dir: ${java.io.tmpdir}/account-hr-test-import-source

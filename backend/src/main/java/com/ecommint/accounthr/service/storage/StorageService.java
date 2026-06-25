@@ -48,6 +48,26 @@ public interface StorageService {
                      InputStream content,
                      FileType fileType);
 
+    /**
+     * Migrasyon (E2-03) için: bir kaynak dosyayı storage kökü ALTINA, göreli yolunu
+     * AYNEN koruyarak kopyalar. Yeniden adlandırma / fatura-tarihi yeniden klasörleme
+     * YAPMAZ — mevcut yerleşim olduğu gibi taşınır.
+     *
+     * <p>Drive aynası ({@code expenses/faturalar}) kaynaktır ve ASLA değiştirilmez; bu
+     * metot yalnızca storage kökü içine YAZAR. {@code relativePath} kök altında çözülür,
+     * yol-aşımına (path traversal) karşı korunur.
+     *
+     * <p>Idempotent: hedefte aynı içeriğe (SHA-256) sahip dosya zaten varsa yeniden
+     * kopyalamaz; mevcut dosyanın metadata'sını döndürür.
+     *
+     * @param relativePath storage köküne göreli hedef yol (ör. {@code 2026-03/aws_mart.pdf})
+     * @param content      kopyalanacak içerik (akış tüketilir, çağıran kapatır)
+     * @return kopyalanan/var olan dosyanın göreli yolu + ad + SHA-256 + boyutu
+     * @throws StoragePathTraversalException çözülen yol kök dışına çıkarsa
+     * @throws StorageException I/O hatalarında
+     */
+    StoredFile copyPreservingPath(String relativePath, InputStream content);
+
     /** Fiziksel dosyayı {@code waiting/} altına taşır ve FileAsset.path'i günceller. */
     void moveToWaiting(Long fileId);
 

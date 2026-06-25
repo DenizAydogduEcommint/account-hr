@@ -13,6 +13,11 @@ public interface FileAssetRepository extends JpaRepository<FileAsset, Long> {
     /** Duplicate tespiti (bütünlük): aynı içerik hash'ine sahip kayıtlar. */
     List<FileAsset> findBySha256(String sha256);
 
+    /** Idempotency (E2-03): aynı storage-root göreli yoluna sahip kayıt var mı? */
+    List<FileAsset> findByFilePath(String filePath);
+
+    boolean existsBySha256(String sha256);
+
     /**
      * Duplicate tespiti (mantıksal): aynı (provider, invoice_no) ikilisine bağlı
      * mevcut dosyalar. invoice → provider ve invoice_no üzerinden gider.

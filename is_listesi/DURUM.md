@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 8 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Özet:** 9 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 
@@ -29,7 +29,7 @@
 |-------|--------|-------|-----|
 | E2-01 | Excel ay-sheet importer | ✅ | IK-232. POI importer + admin endpoint. PG14'te 101 expense (idempotent). CI yeşil (4 fix sonrası). |
 | E2-02 | Servisler master importer | ✅ | IK-233. Upsert + service_contacts + V7 active_months. PG14: 28 service zenginleşti, idempotent. Audit özyineleme (StackOverflow) bug'ı düzeltildi |
-| E2-03 | Faturalar klasör tarama & eşleştirme | ⬜ | |
+| E2-03 | Faturalar klasör tarama & eşleştirme | ✅ | IK-234. faturalar→storage kopya + invoice eşleme (note path). PG14: 55 dosya/49 eşleşti, orphan yok, kaynak dokunulmadı. Bağımsız review orphan bug'ı yakaladı |
 | E2-04 | Durum/renk enum migrasyonu | ⬜ | |
 | E2-05 | Migrasyon doğrulama & mutabakat | ⬜ | |
 | E2-06 | Drive waiting senkron köprüsü | ⬜ | |
@@ -115,5 +115,6 @@ Tüm E1 kodu (iki repo) Codex + Claude code-reviewer ile tarandı. **7 gerçek h
 | A2/A3 | low | `AuditFlusherHolder`/`EncryptionServiceHolder` JVM-global static | Tek Spring context'te çalışır; çok-context'e geçilirse bean-scoped wiring |
 | A4 | low | `LogMasker` henüz log noktalarına bağlı değil | Hassas değer loglanan ilk noktada devreye alınacak (şu an loglanmıyor) |
 | E2-02-1 | medium | `GlobalExceptionHandler` 500 log'u exception zincirini (JDBC SQL literal vb.) içerebilir → teorik secret/PII | Kabul edildi (500 debugging değeri yüksek, StackOverflow'u bu yakaladı; prod log erişimi kısıtlı). İleride `LogMasker` veya mesaj-seviye sanitize |
+| E2-03-1 | medium | V9 `files.sha256` partial unique index, mevcut duplicate sha256'lı bir DB'de deploy'da fail edebilir | V9 değiştirilmedi (Flyway checksum). Prod deploy öncesi preflight: `SELECT sha256,count(*) ... HAVING count>1` ile dedup; E1-04 zaten yeni duplicate'i engelliyor |
 
 \* B2 prod'a çıkmadan kapatılacak; MVP/dev'de kabul.

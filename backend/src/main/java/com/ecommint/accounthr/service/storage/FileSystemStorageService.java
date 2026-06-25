@@ -169,6 +169,97 @@ public class FileSystemStorageService implements StorageService {
     }
 
     @Override
+    public StoredFile copyPreservingPath(String relativePath, InputStream content) {
+        if (relativePath == null || relativePath.isBlank()) {
+            throw new StorageException("relativePath zorunludur.");
+        }
+        // Kök altında çöz + yol-aşımı doğrula (savunma: kaynak adı '..' içeremez).
+        Path target = resolveUnderRoot(relativePath);
+        if (target.equals(root)) {
+            throw new StoragePathTraversalException("Hedef yol kökün kendisi olamaz: " + relativePath);
+        }
+        Path parent = target.getParent();
+        try {
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException e) {
+            throw new StorageException("Hedef dizin oluşturulamadı: " + parent, e);
+        }
+
+        // İçeriği geçici dosyaya yaz + SHA-256 hesapla.
+        Path tempFile;
+        try {
+            tempFile = Files.createTempFile(parent, ".copy-", ".tmp");
+        } catch (IOException e) {
+            throw new StorageException("Geçici dosya oluşturulamadı: " + parent, e);
+        }
+        String sha256;
+        long size;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (DigestInputStream dis = new DigestInputStream(content, digest)) {
+                size = Files.copy(dis, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            sha256 = toHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            deleteQuietly(tempFile);
+            throw new StorageException("SHA-256 algoritması bulunamadı.", e);
+        } catch (IOException e) {
+            deleteQuietly(tempFile);
+            throw new StorageException("Dosya yazılamadı: " + target, e);
+        }
+
+        String relForReturn = root.relativize(target).toString();
+        String fileName = target.getFileName().toString();
+
+        // Idempotent: hedef zaten varsa ve aynı içerikse (SHA-256) yeniden kopyalama.
+        if (Files.exists(target)) {
+            String existingSha = sha256Of(target);
+            if (sha256.equals(existingSha)) {
+                deleteQuietly(tempFile);
+                log.debug("copyPreservingPath atlandı (aynı içerik mevcut): {}", relForReturn);
+                return new StoredFile(relForReturn, fileName, sha256, size);
+            }
+            // Farklı içerik aynı yolda → migrasyonda olmamalı; üzerine yazmayı reddet.
+            deleteQuietly(tempFile);
+            throw new StorageException(
+                    "Hedefte farklı içerikli bir dosya zaten var (üzerine yazılmaz): " + relForReturn);
+        }
+
+        try {
+            Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException atomicFailed) {
+            try {
+                Files.move(tempFile, target);
+            } catch (IOException e) {
+                deleteQuietly(tempFile);
+                throw new StorageException("Dosya taşınamadı: " + target, e);
+            }
+        }
+
+        log.info("Migrasyon kopyası yazıldı path={} sha256={} size={}", relForReturn, sha256, size);
+        return new StoredFile(relForReturn, fileName, sha256, size);
+    }
+
+    /** Var olan bir dosyanın SHA-256 hex digestini hesaplar (idempotency kontrolü). */
+    private String sha256Of(Path file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream in = Files.newInputStream(file);
+                 DigestInputStream dis = new DigestInputStream(in, digest)) {
+                byte[] buf = new byte[8192];
+                while (dis.read(buf) != -1) {
+                    // digest beslenir
+                }
+            }
+            return toHex(digest.digest());
+        } catch (NoSuchAlgorithmException | IOException e) {
+            throw new StorageException("Mevcut dosyanın hash'i hesaplanamadı: " + file, e);
+        }
+    }
+
+    @Override
     @Transactional
     public void moveToWaiting(Long fileId) {
         relocate(fileId, WAITING_DIR);

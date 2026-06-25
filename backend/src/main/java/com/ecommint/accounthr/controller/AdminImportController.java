@@ -2,6 +2,8 @@ package com.ecommint.accounthr.controller;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -11,10 +13,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecommint.accounthr.config.ImportProperties;
 import com.ecommint.accounthr.dto.importer.ImportSummary;
+import com.ecommint.accounthr.dto.importer.InvoiceFileImportSummary;
 import com.ecommint.accounthr.dto.importer.ServiceImportSummary;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
 import com.ecommint.accounthr.service.importer.ExcelImportService;
+import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
+import com.ecommint.accounthr.service.importer.InvoiceFileImportService;
 import com.ecommint.accounthr.service.importer.ServiceMasterImportService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,11 +43,17 @@ public class AdminImportController {
 
     private final ExcelImportService excelImportService;
     private final ServiceMasterImportService serviceMasterImportService;
+    private final InvoiceFileImportService invoiceFileImportService;
+    private final ImportProperties importProperties;
 
     public AdminImportController(ExcelImportService excelImportService,
-                                 ServiceMasterImportService serviceMasterImportService) {
+                                 ServiceMasterImportService serviceMasterImportService,
+                                 InvoiceFileImportService invoiceFileImportService,
+                                 ImportProperties importProperties) {
         this.excelImportService = excelImportService;
         this.serviceMasterImportService = serviceMasterImportService;
+        this.invoiceFileImportService = invoiceFileImportService;
+        this.importProperties = importProperties;
     }
 
     /** Excel dosyasını yükle ve ay sheet'lerini import et. */
@@ -83,5 +95,43 @@ public class AdminImportController {
         } catch (IOException e) {
             throw new ExcelImportException("Yüklenen dosya okunamadı.", e);
         }
+    }
+
+    /**
+     * {@code faturalar/} klasörünü tarayıp dosyaları storage kökü altına KOPYALAR ve
+     * invoice/files eşlemesini kurar (E2-03 — klasör tarama migrasyonu; multipart upload
+     * DEĞİL). Kaynak dizin (Drive aynası) yalnızca OKUNUR; oraya asla yazılmaz/silinmez.
+     */
+    @PostMapping(path = "/invoice-files")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "faturalar/ klasörünü tara, kopyala ve invoice/files eşle",
+            description = "Kaynak klasörü (Drive aynası, varsayılan expenses/faturalar — READ-ONLY) "
+                    + "recursive tarar; her fizik dosyayı storage kökü altına göreli yolunu KORUYARAK "
+                    + "kopyalar (yeniden adlandırma/klasörleme YOK). Dosyaları invoice 'Fatura Notu' "
+                    + "path eşleşmesi + türev kardeş kuralıyla expense'lere bağlar; trash/ unmatched. "
+                    + "Idempotent (SHA-256): 2. çalıştırma 0 yeni satır ekler. Yalnızca ADMIN.")
+    public InvoiceFileImportSummary importInvoiceFiles(
+            @RequestParam(name = "sourceDir", required = false) String sourceDir) {
+        String base = importProperties.getInvoiceFilesSourceDir();
+        if (base == null || base.isBlank()) {
+            throw new InvoiceFileImportException(
+                    "app.import.invoice-files-source-dir (INVOICE_FILES_SOURCE_DIR) tanımlı değil.");
+        }
+        Path baseDir = Paths.get(base).toAbsolutePath().normalize();
+
+        Path source;
+        if (sourceDir == null || sourceDir.isBlank()) {
+            source = baseDir;
+        } else {
+            // Güvenlik (least privilege): istekteki sourceDir izinli kök ALTINDA olmalı.
+            // Keyfi dizinlerin (ör. /etc) taranmasını engeller.
+            source = Paths.get(sourceDir).toAbsolutePath().normalize();
+            if (!source.startsWith(baseDir)) {
+                throw new InvoiceFileImportException(
+                        "sourceDir izinli kaynak kökünün dışında: " + sourceDir);
+            }
+        }
+        return invoiceFileImportService.scanAndImport(source);
     }
 }

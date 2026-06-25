@@ -124,6 +124,8 @@ Her iş/görev tamamlandıktan sonra, **commit ve push'tan ÖNCE** code review d
 - Önemli/gerçek bulgular düzeltilmeden commit YAPILMAZ. Düzeltme sonrası ilgili testler yeşil kalmalı.
 - Doğrulama borcu kuralıyla birlikte: review temiz + testler geçer + (mümkünse) gerçek Postgres doğrulaması → sonra commit/push → sonra YouTrack yorumu.
 - **Genel:** kullanıcıya verilen YouTrack/JIRA yorumlarında emoji kullanma.
+7. **Push'tan SONRA CI'ı doğrula (ZORUNLU):** GitHub Actions olan repolarda push sonrası `gh run watch <id> --exit-status` ile run'ın YEŞİL olduğunu teyit et. Kırmızıysa `gh run view <id> --log-failed` ile gerçek hatayı çek, düzelt, tekrar push — **CI yeşil olana kadar.** CI kırmızı bırakılıp yeni göreve geçilmez. (`gh` ile teyit edilemiyorsa kullanıcıdan fail log'u iste.)
+- **CI ortam farkı dersleri:** lokalde geçen testler CI'da patlayabilir → CI'ı taklit et (`-Dsurefire.runOrder=alphabetical` test sırası; `TZ=UTC`/`LANG=C` locale). Paylaşılan H2'de @SpringBootTest'ler veriyi sızdırır → testler FK-safe temizlenmeli (bkz. `AbstractDataCleanupIT`). `npm ci` lokal/CI npm sürüm-drift'inde lock-senkron hatası verebilir → workflow ve Dockerfile'da `npm ci || npm install` fallback.
 
 ## Çalışma Tarzı
 Her sprint en az bir süreci bitiren, küçük adımlarla ilerleyen yaklaşım. Az kod bilen ekip üyeleri de takip edebilmeli; kod ve commitler açıklayıcı olmalı.

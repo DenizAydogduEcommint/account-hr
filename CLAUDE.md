@@ -120,8 +120,10 @@ Her iş/görev tamamlandıktan sonra, **commit ve push'tan ÖNCE** code review d
 3. Review'ı **tekrar** çalıştır.
 4. Hata sayısı **0 olana kadar** 1–3 adımlarını döngüle.
 5. **Yalnızca review temiz (0 hata) olunca** commit + push yapılır.
+6. **Commit + push'tan SONRA**, ilgili YouTrack issue'su için **yapıştırılmaya hazır bir tamamlanma yorumu** üret ve kullanıcıya ver — her iş bitiminde, istenmese bile. İçerik: DOD checklist (işaretli), üretilenler, doğrulama sonuçları, kalan iş/borç. **Yorumlarda EMOJİ KULLANILMAZ** (düz metin; markdown checkbox `[x]` serbest). Hangi IK issue'suna yapıştırılacağı belirtilir.
 - Önemli/gerçek bulgular düzeltilmeden commit YAPILMAZ. Düzeltme sonrası ilgili testler yeşil kalmalı.
-- Doğrulama borcu kuralıyla birlikte: review temiz + testler geçer + (mümkünse) gerçek Postgres doğrulaması → sonra commit/push.
+- Doğrulama borcu kuralıyla birlikte: review temiz + testler geçer + (mümkünse) gerçek Postgres doğrulaması → sonra commit/push → sonra YouTrack yorumu.
+- **Genel:** kullanıcıya verilen YouTrack/JIRA yorumlarında emoji kullanma.
 
 ## Çalışma Tarzı
 Her sprint en az bir süreci bitiren, küçük adımlarla ilerleyen yaklaşım. Az kod bilen ekip üyeleri de takip edebilmeli; kod ve commitler açıklayıcı olmalı.

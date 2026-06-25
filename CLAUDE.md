@@ -113,5 +113,15 @@ cd frontend && npm test
 E1 Altyapı/veri modeli → E2 Migrasyon → **E3 Web uygulaması (MVP: eksik fatura ekranı + yükleme)** → E4 Banka ekstresi → E6 Bildirim → E5 Otomatik toplama → E7 Paraşüt → E8 Raporlama → E9 Gelecek.
 **MVP = E1 + E2 + E3.** İlk görev: **IK-225 / E1-01** (Spring Boot + Angular + PostgreSQL + Docker iskelet).
 
+## İş Akışı: Code Review Loop (ZORUNLU — commit'ten ÖNCE)
+Her iş/görev tamamlandıktan sonra, **commit ve push'tan ÖNCE** code review döngüsü çalıştırılır:
+1. Değişen kod üzerinde code review çalıştır (Codex CLI: `codex exec --full-auto -s read-only 'Review this diff for bugs and security issues'`; alternatif `/code-review`).
+2. Bulunan gerçek hataları/sorunları düzelt (yanlış pozitifleri gerekçesiyle ele; gerekirse testleri tekrar çalıştır).
+3. Review'ı **tekrar** çalıştır.
+4. Hata sayısı **0 olana kadar** 1–3 adımlarını döngüle.
+5. **Yalnızca review temiz (0 hata) olunca** commit + push yapılır.
+- Önemli/gerçek bulgular düzeltilmeden commit YAPILMAZ. Düzeltme sonrası ilgili testler yeşil kalmalı.
+- Doğrulama borcu kuralıyla birlikte: review temiz + testler geçer + (mümkünse) gerçek Postgres doğrulaması → sonra commit/push.
+
 ## Çalışma Tarzı
 Her sprint en az bir süreci bitiren, küçük adımlarla ilerleyen yaklaşım. Az kod bilen ekip üyeleri de takip edebilmeli; kod ve commitler açıklayıcı olmalı.

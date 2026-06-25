@@ -129,6 +129,14 @@ public class ServiceMasterImportService {
                     .add(s);
         }
 
+        // Provider'ları da TEK SEFER yükle (run-içi cache) — aynı provider'lı birden çok
+        // satırda çift insert / unique(name) ihlali riskini kaldırır; Hibernate flush
+        // sırasına bağımlı değildir. Run içinde oluşturulan yeni provider'lar cache'e eklenir.
+        Map<String, Provider> providersByName = new HashMap<>();
+        for (Provider p : providerRepository.findAll()) {
+            providersByName.putIfAbsent(normalize(p.getName()).toLowerCase(Locale.ROOT), p);
+        }
+
         try (Workbook workbook = new XSSFWorkbook(xlsx)) {
             Sheet sheet = workbook.getSheet(SHEET_NAME);
             if (sheet == null) {
@@ -178,7 +186,7 @@ public class ServiceMasterImportService {
                         : null;
 
                 // --- Provider çöz/oluştur ---
-                ProviderResolution pr = resolveOrCreateProvider(providerName);
+                ProviderResolution pr = resolveOrCreateProvider(providerName, providersByName);
                 Provider provider = pr.provider();
                 if (pr.created()) {
                     providersCreated++;
@@ -309,15 +317,19 @@ public class ServiceMasterImportService {
     private record ProviderResolution(Provider provider, boolean created) {
     }
 
-    private ProviderResolution resolveOrCreateProvider(String name) {
+    private ProviderResolution resolveOrCreateProvider(String name,
+            Map<String, Provider> providersByName) {
         String providerName = name == null || name.isEmpty() ? "(Bilinmeyen)" : name;
-        return providerRepository.findByNameIgnoreCase(providerName)
-                .map(p -> new ProviderResolution(p, false))
-                .orElseGet(() -> {
-                    Provider p = new Provider();
-                    p.setName(providerName);
-                    return new ProviderResolution(providerRepository.save(p), true);
-                });
+        String key = normalize(providerName).toLowerCase(Locale.ROOT);
+        Provider cached = providersByName.get(key);
+        if (cached != null) {
+            return new ProviderResolution(cached, false);
+        }
+        Provider p = new Provider();
+        p.setName(providerName);
+        Provider saved = providerRepository.save(p);
+        providersByName.put(key, saved);
+        return new ProviderResolution(saved, true);
     }
 
     /**

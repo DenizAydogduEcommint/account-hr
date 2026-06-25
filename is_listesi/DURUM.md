@@ -114,5 +114,6 @@ Tüm E1 kodu (iki repo) Codex + Claude code-reviewer ile tarandı. **7 gerçek h
 | F5 | low | Guard sadece "token var mı" bakar | Backend her isteği doğruluyor; UX için expiry kontrolü sonra |
 | A2/A3 | low | `AuditFlusherHolder`/`EncryptionServiceHolder` JVM-global static | Tek Spring context'te çalışır; çok-context'e geçilirse bean-scoped wiring |
 | A4 | low | `LogMasker` henüz log noktalarına bağlı değil | Hassas değer loglanan ilk noktada devreye alınacak (şu an loglanmıyor) |
+| E2-02-1 | medium | `GlobalExceptionHandler` 500 log'u exception zincirini (JDBC SQL literal vb.) içerebilir → teorik secret/PII | Kabul edildi (500 debugging değeri yüksek, StackOverflow'u bu yakaladı; prod log erişimi kısıtlı). İleride `LogMasker` veya mesaj-seviye sanitize |
 
 \* B2 prod'a çıkmadan kapatılacak; MVP/dev'de kabul.

@@ -115,7 +115,7 @@ E1 Altyapı/veri modeli → E2 Migrasyon → **E3 Web uygulaması (MVP: eksik fa
 
 ## İş Akışı: Code Review Loop (ZORUNLU — commit'ten ÖNCE)
 Her iş/görev tamamlandıktan sonra, **commit ve push'tan ÖNCE** code review döngüsü çalıştırılır:
-1. Değişen kod üzerinde code review çalıştır (Codex CLI: `codex exec --full-auto -s read-only 'Review this diff for bugs and security issues'`; alternatif `/code-review`).
+1. Değişen kod üzerinde code review çalıştır (Codex CLI: `codex exec --full-auto -s read-only 'Review this diff for bugs and security issues'`; alternatif `/code-review` veya `feature-dev:code-reviewer` agent). **Bağımsızlık ZORUNLU:** işi bir implementation subagent yaptıysa ve o kendi içinde review yapmış olsa bile, ana döngü olarak SEN AYRICA bağımsız bir review turu (taze instance) çalıştırırsın — subagent'ın kendi öz-review'una güvenip geçme.
 2. Bulunan gerçek hataları/sorunları düzelt (yanlış pozitifleri gerekçesiyle ele; gerekirse testleri tekrar çalıştır).
 3. Review'ı **tekrar** çalıştır.
 4. Hata sayısı **0 olana kadar** 1–3 adımlarını döngüle.

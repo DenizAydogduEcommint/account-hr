@@ -44,6 +44,16 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("SELECT i.status, COUNT(i) FROM Invoice i GROUP BY i.status")
     List<Object[]> countGroupByStatus();
 
+    /**
+     * E3-01 — TEK bir dönem (period) için durum→adet dağılımı. Invoice'un period'a
+     * doğrudan FK'i yoktur; ilişki {@code Invoice → Expense → Period} üzerinden kurulur
+     * ({@code i.expense.period.id}). Yalnızca verilen periyoda ait invoice'lar gruplanır.
+     * {@code [InvoiceStatus, Long]} satırları döner; o periyotta hiç o durumdan yoksa
+     * o durum sonuçta YER ALMAZ (eksikler servis katmanında 0'a tamamlanır).
+     */
+    @Query("SELECT i.status, COUNT(i) FROM Invoice i WHERE i.expense.period.id = :periodId GROUP BY i.status")
+    List<Object[]> countGroupByStatusForPeriod(@Param("periodId") Long periodId);
+
     /** Durumu null kalan invoice sayısı (E2-01 garantisiyle 0 beklenir). */
     long countByStatusIsNull();
 }

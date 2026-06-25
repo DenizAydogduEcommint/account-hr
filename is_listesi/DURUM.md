@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 12 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Özet:** 13 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E3 BAŞLADI (tasarım sistemi + dashboard)** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 
@@ -37,7 +37,7 @@
 ## E3 — Web Uygulaması (MVP)
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
-| E3-01 | Dashboard / aylık özet | ⬜ | |
+| E3-01 | Dashboard / aylık özet | ✅ | IK-238. **Tasarım sistemi kuruldu** (E-Commint yeşil/navy, Maven Pro). Dashboard: KPI + donut + ay seçici. Tarayıcıda doğrulandı (Mart ₺114.355,40). İki repo |
 | E3-02 | Servisler ekranı | ⬜ | |
 | E3-03 | Aylık harcamalar ekranı | ⬜ | |
 | E3-04 | Eksik fatura ekranı | ⬜ | MVP çekirdeği |

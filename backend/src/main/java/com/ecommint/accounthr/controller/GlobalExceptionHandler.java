@@ -155,6 +155,15 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_GATEWAY, "DRIVE_SYNC_ERROR", ex.getMessage(), request, null);
     }
 
+    /**
+     * Dashboard {@code month} parametresi biçimsiz (YYYY-MM değil) → 400 BAD_REQUEST.
+     * İyi-biçimli ama bilinmeyen ay (ör. 2026-09) buraya DÜŞMEZ; servis sıfır özet döner.
+     */
+    @ExceptionHandler(InvalidMonthException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMonth(InvalidMonthException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "INVALID_MONTH", ex.getMessage(), request, null);
+    }
+
     /** Bilinmeyen rota / statik kaynak yok → 404 NOT_FOUND. */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex, HttpServletRequest request) {

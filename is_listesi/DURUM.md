@@ -7,7 +7,7 @@
 **Son güncelleme:** 2026-06-25
 **Özet:** 4 / 52 tamamlandı · **MVP = E1 + E2 + E3**
 
-**Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
+**Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Ayrıca **frontend tarayıcı (Playwright) testi**: authGuard yönlendirme → admin login → dashboard "API: UP" (Angular→backend uçtan uca) → Çıkış → login; console 0 hata. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
 
 ---
 

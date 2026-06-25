@@ -15,4 +15,7 @@ public interface ServiceRepository extends JpaRepository<Service, Long> {
      * Örn: findByActiveStateAndFrequency(ActiveState.YES, Frequency.MONTHLY).
      */
     List<Service> findByActiveStateAndFrequency(ActiveState activeState, Frequency frequency);
+
+    /** Bir sağlayıcıya bağlı tüm servisler — importer'ın normalize-isim eşlemesi için. */
+    List<Service> findByProviderId(Long providerId);
 }

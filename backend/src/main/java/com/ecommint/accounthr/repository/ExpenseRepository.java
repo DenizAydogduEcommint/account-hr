@@ -12,4 +12,7 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     /** "Bu servisin bu ay bir satırı var mı?" — eksik fatura çapraz doğrulaması. */
     boolean existsByServiceIdAndPeriodId(Long serviceId, Long periodId);
+
+    /** Importer idempotency: aynı kaynak satır hash'i daha önce eklenmiş mi? (E2-01) */
+    boolean existsBySourceRowHash(String sourceRowHash);
 }

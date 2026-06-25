@@ -57,6 +57,14 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Apache POI: Excel (.xlsx) okuma — E2-01 ay-sheet importer.
+		     Spring Boot 3.5 BOM POI'yi yönetmez; mevcut 5.x sürümü sabitlenir. -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.4.1</version>
+		</dependency>
+
 		<!-- springdoc-openapi: OpenAPI 3 belgesi + Swagger UI (E1-07).
 		     Spring Boot 3.5 / Spring 6 uyumlu (springfox DEĞİL).
 		     UI: /swagger-ui/index.html, JSON: /v3/api-docs. -->

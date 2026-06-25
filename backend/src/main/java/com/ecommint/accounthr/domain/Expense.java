@@ -35,10 +35,19 @@ public class Expense extends BaseEntity {
     @JoinColumn(name = "card_id")
     private Card card;
 
-    @Column(name = "transaction_date", nullable = false)
+    /**
+     * Kart ekstresindeki işlem tarihi. NULLABLE: "Bekleniyor" satırlarında (henüz
+     * çekilmemiş) tarih boş olabilir (E2-01). NOT NULL kısıtı V6 ile kaldırıldı.
+     */
+    @Column(name = "transaction_date")
     private LocalDate transactionDate;
 
-    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    /**
+     * Orijinal (döviz) tutar. NULLABLE: TL ödemelerinde Tutar boş kalıp yalnızca
+     * {@link #amountTry} dolu olabilir (E2-01 Excel importer). NOT NULL kısıtı V6
+     * migration ile kaldırıldı.
+     */
+    @Column(name = "amount", precision = 15, scale = 2)
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
@@ -59,6 +68,14 @@ public class Expense extends BaseEntity {
 
     @Column(name = "purpose", columnDefinition = "TEXT")
     private String purpose;
+
+    /**
+     * Excel importer'ın bir kaynak satırından ürettiği stabil SHA-256 (E2-01).
+     * Idempotency anahtarı: tekrar import'ta aynı hash varsa satır atlanır.
+     * Import dışı oluşan expense'lerde null.
+     */
+    @Column(name = "source_row_hash", length = 64)
+    private String sourceRowHash;
 
     public Service getService() {
         return service;
@@ -138,5 +155,13 @@ public class Expense extends BaseEntity {
 
     public void setPurpose(String purpose) {
         this.purpose = purpose;
+    }
+
+    public String getSourceRowHash() {
+        return sourceRowHash;
+    }
+
+    public void setSourceRowHash(String sourceRowHash) {
+        this.sourceRowHash = sourceRowHash;
     }
 }

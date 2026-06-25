@@ -14,6 +14,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.importer.ExcelImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StoragePathTraversalException;
@@ -103,6 +104,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorage(StorageException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "STORAGE_ERROR", ex.getMessage(), request, null);
+    }
+
+    /** Excel import hatası (okuma/parse) → 400 BAD_REQUEST. */
+    @ExceptionHandler(ExcelImportException.class)
+    public ResponseEntity<ErrorResponse> handleExcelImport(ExcelImportException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "IMPORT_ERROR", ex.getMessage(), request, null);
     }
 
     /** Bilinmeyen rota / statik kaynak yok → 404 NOT_FOUND. */

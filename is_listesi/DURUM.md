@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 6 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 epic esas olarak bitti** (yalnız E1-06 CD/staging ertelendi) · **MVP = E1 + E2 + E3**
+**Özet:** 7 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Ayrıca **frontend tarayıcı (Playwright) testi**: authGuard yönlendirme → admin login → dashboard "API: UP" (Angular→backend uçtan uca) → Çıkış → login; console 0 hata. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
 
@@ -25,7 +25,7 @@
 ## E2 — Veri Migrasyonu
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
-| E2-01 | Excel ay-sheet importer | ⬜ | |
+| E2-01 | Excel ay-sheet importer | ✅ | IK-232. POI importer + admin endpoint. PG14'te gerçek veri: 101 expense, idempotent. |
 | E2-02 | Servisler master importer | ⬜ | |
 | E2-03 | Faturalar klasör tarama & eşleştirme | ⬜ | |
 | E2-04 | Durum/renk enum migrasyonu | ⬜ | |

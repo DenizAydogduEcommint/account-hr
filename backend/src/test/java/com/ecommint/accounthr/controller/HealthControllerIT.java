@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.ecommint.accounthr.AbstractDataCleanupIT;
+
 /**
  * End-to-end wiring test: boots the FULL application context (including Spring
  * Security and JPA) against in-memory H2 on a random port, then hits the real
@@ -20,7 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class HealthControllerIT {
+class HealthControllerIT extends AbstractDataCleanupIT {
 
 	@Autowired
 	private TestRestTemplate restTemplate;

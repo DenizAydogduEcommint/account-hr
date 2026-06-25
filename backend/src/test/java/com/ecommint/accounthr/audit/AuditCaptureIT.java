@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ecommint.accounthr.AbstractDataCleanupIT;
 import com.ecommint.accounthr.domain.AuditLog;
 import com.ecommint.accounthr.domain.Expense;
 import com.ecommint.accounthr.domain.Invoice;
@@ -44,7 +45,7 @@ import com.ecommint.accounthr.repository.ServiceRepository;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-class AuditCaptureIT {
+class AuditCaptureIT extends AbstractDataCleanupIT {
 
     @TestConfiguration
     static class MutatorConfig {

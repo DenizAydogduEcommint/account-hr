@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.ecommint.accounthr.AbstractDataCleanupIT;
+
 /**
  * E1-07 standart hata formatı testi.
  *
@@ -23,7 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class ErrorFormatIT {
+class ErrorFormatIT extends AbstractDataCleanupIT {
 
     @Autowired private TestRestTemplate rest;
 

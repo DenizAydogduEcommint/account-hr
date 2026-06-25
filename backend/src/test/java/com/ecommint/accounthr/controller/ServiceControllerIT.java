@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.ecommint.accounthr.AbstractDataCleanupIT;
 import com.ecommint.accounthr.domain.AppUser;
 import com.ecommint.accounthr.domain.Provider;
 import com.ecommint.accounthr.domain.enums.ActiveState;
@@ -38,7 +39,7 @@ import com.ecommint.accounthr.repository.ServiceRepository;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class ServiceControllerIT {
+class ServiceControllerIT extends AbstractDataCleanupIT {
 
     private static final String PASSWORD = "s3cret-pass";
 

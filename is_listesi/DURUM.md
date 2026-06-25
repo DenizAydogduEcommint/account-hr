@@ -7,15 +7,17 @@
 **Son güncelleme:** 2026-06-25
 **Özet:** 4 / 52 tamamlandı · **MVP = E1 + E2 + E3**
 
+**Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
+
 ---
 
 ## E1 — Temel Altyapı & Veri Modeli
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
-| E1-01 | Proje iskeleti (Spring Boot + Angular + PostgreSQL + Docker) | ✅ | IK-225. İki repo. Docker `up` doğrulaması kaldı |
-| E1-02 | Veritabanı şeması & domain modeli | ✅ | IK-226. SERVICE-FIRST. 12 entity/8 enum/Flyway. Postgres migration doğrulaması kaldı |
-| E1-03 | Kimlik doğrulama & yetkilendirme (JWT) | ✅ | IK-227. JWT+BCrypt+refresh, Angular login. Canlı/Postgres doğrulaması kaldı |
-| E1-04 | Dosya depolama servisi | ✅ | IK-228. StorageService, fatura-tarihi klasör, slugify, dedup, waiting/trash. Postgres V4 doğrulaması kaldı |
+| E1-01 | Proje iskeleti (Spring Boot + Angular + PostgreSQL + Docker) | ✅ | IK-225. İki repo. PG14'te health doğrulandı (06-25) |
+| E1-02 | Veritabanı şeması & domain modeli | ✅ | IK-226. SERVICE-FIRST. 12 entity/8 enum. Flyway V1/V2 + validate PG14'te doğrulandı |
+| E1-03 | Kimlik doğrulama & yetkilendirme (JWT) | ✅ | IK-227. JWT+BCrypt+refresh, Angular login. Login+/me PG14'te doğrulandı (API) |
+| E1-04 | Dosya depolama servisi | ✅ | IK-228. StorageService, slugify, dedup, waiting/trash. V4+storage root PG14'te doğrulandı |
 | E1-05 | Config, secret, loglama, audit | ⬜ | Sıradaki |
 | E1-06 | CI/CD & dağıtım | ⬜ | |
 | E1-07 | API tasarım standartları | ⬜ | |

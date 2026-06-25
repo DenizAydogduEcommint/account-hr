@@ -2,6 +2,8 @@ package com.ecommint.accounthr.controller;
 
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -45,6 +47,8 @@ import jakarta.validation.ConstraintViolationException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
@@ -121,6 +125,9 @@ public class GlobalExceptionHandler {
     /** Son güvenlik ağı: beklenmeyen hatalar → 500. Stack trace / sır SIZDIRMAZ. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
+        String traceId = org.slf4j.MDC.get("correlationId");
+        // Full stack to logs ONLY; HTTP response body never carries stack/secrets.
+        log.error("Unhandled 500 [traceId={}] on {} {}", traceId, request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred.", request, null);
     }

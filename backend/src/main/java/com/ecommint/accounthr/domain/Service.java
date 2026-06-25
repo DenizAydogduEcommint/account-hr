@@ -63,6 +63,14 @@ public class Service extends BaseEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * "Aktif Aylar" — Servisler master sheet'inden gelen virgüllü ay string'i
+     * (ör. "2026-01, 2026-02, 2026-03"). Bilgi amaçlı; modelde service↔period
+     * ilişkisi olmadığı için verbatim saklanır (E2-02).
+     */
+    @Column(name = "active_months", length = 255)
+    private String activeMonths;
+
     public String getName() {
         return name;
     }
@@ -149,5 +157,13 @@ public class Service extends BaseEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getActiveMonths() {
+        return activeMonths;
+    }
+
+    public void setActiveMonths(String activeMonths) {
+        this.activeMonths = activeMonths;
     }
 }

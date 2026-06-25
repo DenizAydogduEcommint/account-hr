@@ -17,11 +17,13 @@ import com.ecommint.accounthr.config.ImportProperties;
 import com.ecommint.accounthr.dto.importer.ImportSummary;
 import com.ecommint.accounthr.dto.importer.InvoiceFileImportSummary;
 import com.ecommint.accounthr.dto.importer.ServiceImportSummary;
+import com.ecommint.accounthr.dto.importer.StatusAuditSummary;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
 import com.ecommint.accounthr.service.importer.ExcelImportService;
 import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.importer.InvoiceFileImportService;
 import com.ecommint.accounthr.service.importer.ServiceMasterImportService;
+import com.ecommint.accounthr.service.importer.StatusAuditService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,15 +46,18 @@ public class AdminImportController {
     private final ExcelImportService excelImportService;
     private final ServiceMasterImportService serviceMasterImportService;
     private final InvoiceFileImportService invoiceFileImportService;
+    private final StatusAuditService statusAuditService;
     private final ImportProperties importProperties;
 
     public AdminImportController(ExcelImportService excelImportService,
                                  ServiceMasterImportService serviceMasterImportService,
                                  InvoiceFileImportService invoiceFileImportService,
+                                 StatusAuditService statusAuditService,
                                  ImportProperties importProperties) {
         this.excelImportService = excelImportService;
         this.serviceMasterImportService = serviceMasterImportService;
         this.invoiceFileImportService = invoiceFileImportService;
+        this.statusAuditService = statusAuditService;
         this.importProperties = importProperties;
     }
 
@@ -133,5 +138,33 @@ public class AdminImportController {
             }
         }
         return invoiceFileImportService.scanAndImport(source);
+    }
+
+    /**
+     * Fatura durumu/renk tutarlılık denetimi (E2-04). Yüklenen Excel'de her ay-sheet
+     * satırının {@code Fatura Durumu} METNİ ile DOLGU RENGİNİ çapraz doğrular (metin
+     * önceliklidir) ve E2-03'te dosyası bulunduğu hâlde "Bekleniyor" kalan invoice'ları
+     * tutarsızlık olarak raporlar. Varsayılan: yalnızca rapor ({@code autofix=false}).
+     */
+    @PostMapping(path = "/status-audit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "Fatura durumu/renk tutarlılık denetimi",
+            description = "2026_Harcamalar.xlsx'i yükler; ay-sheet'lerde Fatura Durumu metin↔renk "
+                    + "tutarlılığını denetler (metin otoriter; FF9800 Araştırılacak↔Ignored "
+                    + "belirsizliği metinle çözülür) ve dosyası bulunduğu hâlde EXPECTED kalan "
+                    + "invoice'ları raporlar. autofix=true ise bu invoice'lar FOUND'a çekilir "
+                    + "(varsayılan false → yalnızca rapor, manuel onay). Yalnızca ADMIN.")
+    public StatusAuditSummary statusAudit(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "autofix", defaultValue = "false") boolean autofix) {
+        if (file == null || file.isEmpty()) {
+            throw new ExcelImportException("Boş dosya yüklenemez.");
+        }
+        try (InputStream in = file.getInputStream()) {
+            return statusAuditService.auditStatuses(in, autofix);
+        } catch (IOException e) {
+            throw new ExcelImportException("Yüklenen dosya okunamadı.", e);
+        }
     }
 }

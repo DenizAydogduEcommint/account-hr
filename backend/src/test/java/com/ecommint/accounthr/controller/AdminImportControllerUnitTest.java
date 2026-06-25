@@ -41,7 +41,7 @@ class AdminImportControllerUnitTest {
     private AdminImportController controller(InvoiceFileImportService svc) {
         ImportProperties props = new ImportProperties();
         props.setInvoiceFilesSourceDir(allowedBase.toString());
-        return new AdminImportController(null, null, svc, props);
+        return new AdminImportController(null, null, svc, null, props);
     }
 
     @Test
@@ -81,7 +81,7 @@ class AdminImportControllerUnitTest {
         StubService svc = new StubService(src -> {
             throw new AssertionError("çağrılmamalı");
         });
-        AdminImportController controller = new AdminImportController(null, null, svc, props);
+        AdminImportController controller = new AdminImportController(null, null, svc, null, props);
 
         assertThatThrownBy(() -> controller.importInvoiceFiles(null))
                 .isInstanceOf(InvoiceFileImportException.class)

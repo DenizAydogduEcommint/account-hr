@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 9 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Özet:** 10 / 52 tamamlandı (+ E1-06 CI kısmı) · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 
@@ -30,7 +30,7 @@
 | E2-01 | Excel ay-sheet importer | ✅ | IK-232. POI importer + admin endpoint. PG14'te 101 expense (idempotent). CI yeşil (4 fix sonrası). |
 | E2-02 | Servisler master importer | ✅ | IK-233. Upsert + service_contacts + V7 active_months. PG14: 28 service zenginleşti, idempotent. Audit özyineleme (StackOverflow) bug'ı düzeltildi |
 | E2-03 | Faturalar klasör tarama & eşleştirme | ✅ | IK-234. faturalar→storage kopya + invoice eşleme (note path). PG14: 55 dosya/49 eşleşti, orphan yok, kaynak dokunulmadı. Bağımsız review orphan bug'ı yakaladı |
-| E2-04 | Durum/renk enum migrasyonu | ⬜ | |
+| E2-04 | Durum/renk enum migrasyonu | ✅ | IK-235. Renk-metin audit + dosya-durum tutarlılık + StatusColors. PG14: 0 tutarsızlık (veri temiz), dağılım doğru |
 | E2-05 | Migrasyon doğrulama & mutabakat | ⬜ | |
 | E2-06 | Drive waiting senkron köprüsü | ⬜ | |
 

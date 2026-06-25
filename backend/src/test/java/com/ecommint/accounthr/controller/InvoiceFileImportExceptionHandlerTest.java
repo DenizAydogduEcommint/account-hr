@@ -44,7 +44,7 @@ class InvoiceFileImportExceptionHandlerTest {
         ImportProperties props = new ImportProperties();
         props.setInvoiceFilesSourceDir(allowedBase.toString());
         AdminImportController controller =
-                new AdminImportController(null, null, new StubService(), props);
+                new AdminImportController(null, null, new StubService(), null, props);
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

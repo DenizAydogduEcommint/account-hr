@@ -457,34 +457,12 @@ public class ExcelImportService {
         return digits.length() > 4 ? digits.substring(digits.length() - 4) : digits;
     }
 
+    /**
+     * Durum metnini enum'a eşler (E2-04'te {@link StatusText}'e çıkarıldı; tek kaynak).
+     * Tanınmayan/boş → varsayılan {@link InvoiceStatus#EXPECTED}.
+     */
     private InvoiceStatus parseStatus(String raw) {
-        if (raw == null) {
-            return InvoiceStatus.EXPECTED;
-        }
-        String v = raw.trim();
-        // TR büyük/küçük harf duyarsız karşılaştırma.
-        if (equalsTr(v, "Bekleniyor")) {
-            return InvoiceStatus.EXPECTED;
-        }
-        if (equalsTr(v, "Bulundu")) {
-            return InvoiceStatus.FOUND;
-        }
-        if (equalsTr(v, "e-Fatura") || equalsTr(v, "eFatura")) {
-            return InvoiceStatus.E_INVOICE;
-        }
-        if (equalsTr(v, "Araştırılacak")) {
-            return InvoiceStatus.TO_INVESTIGATE;
-        }
-        if (equalsTr(v, "Ignored")) {
-            return InvoiceStatus.IGNORED;
-        }
-        // Bilinmeyen/boş → bekleniyor (varsayılan).
-        return InvoiceStatus.EXPECTED;
-    }
-
-    private boolean equalsTr(String a, String b) {
-        return a.toLowerCase(java.util.Locale.forLanguageTag("tr"))
-                .equals(b.toLowerCase(java.util.Locale.forLanguageTag("tr")));
+        return StatusText.toStatus(raw);
     }
 
     // ---------------------------------------------------------------------------

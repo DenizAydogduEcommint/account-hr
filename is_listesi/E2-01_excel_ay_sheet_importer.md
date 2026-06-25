@@ -56,6 +56,7 @@ Bu importer sheet'leri tarar, satırları okur, ilgili period/card/service/provi
 - Üretilenler: ExcelImportService (POI), AdminImportController (`POST /api/v1/admin/imports/excel`, ADMIN), ImportSummary, Flyway V6 (`expenses.source_row_hash` + amount/transaction_date NOT NULL kaldırıldı), ExcelImportException
 - **Gerçek veri doğrulaması (lokal PG14)**: `2026_Harcamalar.xlsx` import → **101 expense** (Ocak 11, Şubat 51=28 op+23 info, Mart 23, Nisan 16), 101 taslak invoice, 32 service + 24 provider oluştu, 7 iade; TOPLAM(10)+boş(2910) atlandı; **idempotency: 2. import = 0 yeni**. Şubat informational satırları (Sağlık 19 + Multinet 3 + Allianz 1) Excel kaynağıyla birebir doğrulandı.
 - Test: `./mvnw test` 50/50 (2 importer testi: imported/skip/informational/idempotency)
+- **CI: GitHub Actions YEŞİL** (gh ile teyit edildi). Push sonrası 4 CI fix gerekti: (1) test izolasyonu `AbstractDataCleanupIT` — paylaşılan H2'de FK ihlali (CI test sırası); (2) frontend package-lock yeniden üretimi; (3) workflow `npm ci || npm install` fallback; (4) Dockerfile aynı fallback. Dersler CLAUDE.md "Code Review Loop" adım 7'ye işlendi.
 - Review: 3 robustness bulgusu düzeltildi (DataFormatter per-call thread-safety, section-header gevşetildi, duplicate-skip log.warn). Codex kotası dolu → Claude code-reviewer fallback.
 - **expenses/ Drive aynasına dokunulmadı** (Excel read-only upload).
 - Sapma: E1-02'deki `Expense.amount` ve `transaction_date` NOT NULL → nullable yapıldı (V6); TL ödeme/bekleniyor satırları için gerekli.

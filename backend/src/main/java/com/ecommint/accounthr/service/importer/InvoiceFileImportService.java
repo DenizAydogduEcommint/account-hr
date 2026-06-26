@@ -68,8 +68,12 @@ public class InvoiceFileImportService {
     /** invoice.note path'lerinin başındaki bu önek atılır (DB: faturalar/2026-03/x.pdf). */
     private static final String NOTE_PATH_PREFIX = "faturalar/";
 
-    /** Taban ad türetirken atılan tip ekleri (note dosyasıyla kardeşlik kurmak için). */
-    private static final String[] DERIVED_SUFFIXES = {"_statement", "_receipt"};
+    /**
+     * Taban ad türetirken atılan tip ekleri (note dosyasıyla kardeşlik kurmak için).
+     * {@code _refund}: CLAUDE.md, {@code aws_mart_refund.pdf}'i ana faturanın ({@code aws_mart})
+     * kardeşi sayar → türev taban {@code aws_mart} olur.
+     */
+    private static final String[] DERIVED_SUFFIXES = {"_statement", "_receipt", "_refund"};
 
     private final StorageService storageService;
     private final InvoiceRepository invoiceRepository;
@@ -100,6 +104,12 @@ public class InvoiceFileImportService {
         // --- Eşleme indeksleri (note path + türev taban ad → invoice) ---
         Map<String, Invoice> noteIndex = new HashMap<>();
         Map<String, Invoice> baseIndex = new HashMap<>();
+        // Aynı baseKey'e düşen birden fazla note çakışmasını çöz: note'u TAM taban dosya adı
+        // olan invoice tercih edilir (türev _statement/_receipt/_refund formu DEĞİL). Çakışma
+        // hâlâ belirsizse (iki "tam taban" ya da iki türev) baseKey indeksten DÜŞÜRÜLÜR →
+        // kardeş dosya yanlış invoice'a bağlanmaz, unmatched'e gider (rapor + uyarı logu).
+        Set<String> ambiguousBaseKeys = new HashSet<>();
+        Map<String, Boolean> baseKeyHasExact = new HashMap<>();
         for (Invoice invoice : invoiceRepository.findByNoteIsNotNull()) {
             String rel = normalizeNotePath(invoice.getNote());
             if (rel == null) {
@@ -107,9 +117,29 @@ public class InvoiceFileImportService {
             }
             noteIndex.putIfAbsent(rel, invoice);
             String baseKey = folderBaseKey(rel);
-            if (baseKey != null) {
-                baseIndex.putIfAbsent(baseKey, invoice);
+            if (baseKey == null) {
+                continue;
             }
+            boolean isExact = isExactBaseNote(rel);
+            Boolean existingExact = baseKeyHasExact.get(baseKey);
+            if (existingExact == null) {
+                // İlk kez görülüyor → kaydet.
+                baseIndex.put(baseKey, invoice);
+                baseKeyHasExact.put(baseKey, isExact);
+            } else if (isExact && !existingExact) {
+                // Yeni gelen TAM taban, önceki türevdi → tam taban kazanır (belirsizlik değil).
+                baseIndex.put(baseKey, invoice);
+                baseKeyHasExact.put(baseKey, true);
+            } else if (isExact == existingExact) {
+                // İkisi de aynı sınıf (iki tam taban veya iki türev) → belirsiz.
+                ambiguousBaseKeys.add(baseKey);
+            }
+            // (isExact==false && existingExact==true): mevcut tam tabanı koru → değişme yok.
+        }
+        for (String key : ambiguousBaseKeys) {
+            baseIndex.remove(key);
+            log.warn("baseKey belirsiz (birden çok note aynı taban ada düşüyor) → kardeş "
+                    + "eşleştirme devre dışı, dosyalar unmatched'e gidecek: {}", key);
         }
 
         int scanned = 0;
@@ -121,6 +151,10 @@ public class InvoiceFileImportService {
         int newFileRows = 0;
         List<String> unmatchedFiles = new ArrayList<>();
         Set<String> shaSeenThisRun = new HashSet<>();
+        // Bu run'da her sha içeriğinin İLK bağlandığı invoice id'si (null = eşleşmedi/trash).
+        // Aynı içerik bu run'da farklı bir faturaya eşleşirse (çapraz-fatura çakışması) ikincisi
+        // sessizce atlanmaz, raporlanır.
+        Map<String, Long> shaBoundInvoiceThisRun = new HashMap<>();
 
         List<Path> files = collectFiles(source);
         for (Path file : files) {
@@ -152,7 +186,48 @@ public class InvoiceFileImportService {
             //     bir fizik kopya + bir DB satırı kalır; orphan oluşmaz. ---
             // Re-run'da bu yol her dosya için çalışır → copied/matched/... hepsi 0,
             // newFileRows 0. Böylece "2. çalıştırma 0 yeni dosya" kanıtlanır.
-            if (alreadyInDb || sameRunDuplicate) {
+            if (alreadyInDb) {
+                // FIX (sessiz düşürme): V9 kısmi-tekil index ikinci bir FileAsset satırına
+                // izin vermez (tam junction kapsam dışı — çok-faturalı paylaşım ERTELENDİ).
+                // Ama bu dosya FARKLI bir faturaya eşleşiyorsa içerik-aynı dosyayı sessizce
+                // atlamak, o farklı faturayı dosyasız/görünmez bırakır. Bu yüzden çapraz-fatura
+                // çakışmasını RAPORLA (unmatched + uyarı); aynı faturaya re-import ise (idempotent
+                // re-run) sessiz kalır.
+                Invoice thisMatch = isUnderTrash(relPath)
+                        ? null
+                        : findMatch(relPath, noteIndex, baseIndex);
+                Long thisInvoiceId = thisMatch != null ? thisMatch.getId() : null;
+                boolean crossInvoiceCollision = false;
+                for (FileAsset owner : fileAssetRepository.findBySha256(sha256)) {
+                    Long ownerInvoiceId = owner.getInvoice() != null
+                            ? owner.getInvoice().getId() : null;
+                    if (!java.util.Objects.equals(ownerInvoiceId, thisInvoiceId)) {
+                        crossInvoiceCollision = true;
+                        break;
+                    }
+                }
+                if (crossInvoiceCollision) {
+                    unmatched++;
+                    unmatchedFiles.add(relPath + " — içerik-aynı, başka faturaya bağlı; manuel inceleme");
+                    log.warn("İçerik-aynı dosya farklı faturaya eşleşiyor ama mevcut FileAsset "
+                            + "başka faturaya bağlı (V9 tekil index ikinci satıra izin vermez) → "
+                            + "unmatched olarak raporlandı: {}", relPath);
+                }
+                continue;
+            }
+            if (sameRunDuplicate) {
+                // Aynı run'da ikinci kez görülen içerik. FARKLI faturaya eşleşiyorsa
+                // (çapraz-fatura çakışması) sessizce atlama → raporla.
+                Long thisInvoiceId = isUnderTrash(relPath)
+                        ? null
+                        : invoiceIdOf(findMatch(relPath, noteIndex, baseIndex));
+                Long boundInvoiceId = shaBoundInvoiceThisRun.get(sha256);
+                if (!java.util.Objects.equals(boundInvoiceId, thisInvoiceId)) {
+                    unmatched++;
+                    unmatchedFiles.add(relPath + " — içerik-aynı, başka faturaya bağlı; manuel inceleme");
+                    log.warn("İçerik-aynı dosya bu run'da farklı faturaya eşleşiyor (V9 tekil index "
+                            + "ikinci satıra izin vermez) → unmatched olarak raporlandı: {}", relPath);
+                }
                 continue;
             }
             shaSeenThisRun.add(sha256);
@@ -164,6 +239,7 @@ public class InvoiceFileImportService {
             // --- Eşleme ---
             boolean inTrash = isUnderTrash(relPath);
             Invoice match = inTrash ? null : findMatch(relPath, noteIndex, baseIndex);
+            shaBoundInvoiceThisRun.put(sha256, invoiceIdOf(match));
 
             FileAsset asset = new FileAsset();
             asset.setInvoice(match);
@@ -297,6 +373,10 @@ public class InvoiceFileImportService {
         return relPath.equals(TRASH_DIR) || relPath.startsWith(TRASH_DIR + "/");
     }
 
+    private static Long invoiceIdOf(Invoice invoice) {
+        return invoice != null ? invoice.getId() : null;
+    }
+
     // ------------------------------------------------------------------------
     // Path / tip yardımcıları (paket-private: birim testi için)
     // ------------------------------------------------------------------------
@@ -343,6 +423,29 @@ public class InvoiceFileImportService {
         String name = norm.substring(lastSlash + 1);
         String base = baseName(name);
         return base.isEmpty() ? null : folder + "/" + base;
+    }
+
+    /**
+     * Bu note göreli yolu TAM taban dosya adına mı işaret ediyor (türev DEĞİL)?
+     * Yani uzantı atıldıktan sonra adı bilinen bir tip ekiyle ({@code _statement},
+     * {@code _receipt}, {@code _refund}) BİTMİYORsa true. Çakışan baseKey'lerde tam
+     * tabanlı note türev formlara tercih edilir.
+     */
+    static boolean isExactBaseNote(String relPath) {
+        String norm = relPath.replace('\\', '/');
+        int lastSlash = norm.lastIndexOf('/');
+        String name = lastSlash >= 0 ? norm.substring(lastSlash + 1) : norm;
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        for (String suffix : DERIVED_SUFFIXES) {
+            if (lower.endsWith(suffix)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Dosya adından uzantı + bilinen tip eklerini atıp taban adı döndürür. */

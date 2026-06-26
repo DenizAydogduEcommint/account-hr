@@ -362,6 +362,125 @@ class ServiceMasterImportIT extends AbstractDataCleanupIT {
         assertThat(contactRepository.count()).isEqualTo(contactsAfterFirst);
     }
 
+    /**
+     * FIX 7: adı/notu "toplam" içeren GERÇEK bir servis footer sanılıp DÜŞMEMELİ.
+     * isFooterRow yalnızca "TOPLAM:" (iki nokta) arar ve Hizmet/Notlar kolonlarını
+     * taramaz; bu yüzden "Toplam Yönetim" hizmeti import edilir.
+     */
+    @Test
+    void serviceNamedOrNotedWithToplamIsNotDropped() {
+        ServiceImportSummary summary = importService.importServicesSheet(
+                new ByteArrayInputStream(buildSheetWithToplamNamedService()));
+
+        // 2 satır: "Toplam Yönetim" (adında toplam) + "X Servis" (notunda TOPLAM).
+        assertThat(summary.rowsRead()).isEqualTo(2);
+        assertThat(findServiceOrNull("Toplam Yönetim")).isNotNull();
+        assertThat(findServiceOrNull("X Servis")).isNotNull();
+        assertThat(findServiceOrNull("X Servis").getNotes()).contains("TOPLAM");
+    }
+
+    private byte[] buildSheetWithToplamNamedService() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Servisler");
+            Row header = sheet.createRow(0);
+            String[] headers = {"Hizmet", "Sağlayıcı", "Kart", "Frekans", "Aktif",
+                    "Aktif Aylar", "Yaklaşık Tutar (TL)", "Fatura E-posta",
+                    "Fatura Kaynağı", "Notlar"};
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            // Adında "toplam" geçen gerçek servis.
+            Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("Toplam Yönetim");
+            r1.createCell(1).setCellValue("Acme");
+            r1.createCell(3).setCellValue("Aylık");
+            r1.createCell(4).setCellValue("Evet");
+            // Notunda "TOPLAM:" geçen gerçek servis (etiket kolonlarında TOPLAM yok).
+            Row r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue("X Servis");
+            r2.createCell(1).setCellValue("Beta");
+            r2.createCell(3).setCellValue("Aylık");
+            r2.createCell(4).setCellValue("Evet");
+            r2.createCell(9).setCellValue("Aylık TOPLAM: 500 TL civarı");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * FIX 4: e-posta düzeltildiğinde (sonraki import run'ı farklı e-posta getirir)
+     * servisin TAM OLARAK BİR primary contact'ı kalmalı ve bu EN YENİ e-posta olmalı.
+     * Eski kodda her yeni contact primary=true açıldığı için iki primary kalıyor,
+     * findByServiceIdIn `primary DESC, id ASC` ile ESKİ (yanlış) e-postayı dönüyordu.
+     */
+    @Test
+    void correctedEmailAcrossRunsLeavesExactlyOnePrimaryAndItIsLatest() {
+        // 1. run: Claude AI için eski e-posta.
+        importService.importServicesSheet(new ByteArrayInputStream(
+                buildClaudeWithEmail("old@example.com")));
+        com.ecommint.accounthr.domain.Service claude = findService("Claude AI");
+        List<ServiceContact> afterFirst = contactRepository.findByServiceId(claude.getId());
+        assertThat(afterFirst).hasSize(1);
+        assertThat(afterFirst.get(0).getEmail()).isEqualTo("old@example.com");
+        assertThat(afterFirst.get(0).isPrimary()).isTrue();
+
+        // 2. run: düzeltilmiş yeni e-posta (eski e-posta artık sheet'te yok).
+        importService.importServicesSheet(new ByteArrayInputStream(
+                buildClaudeWithEmail("new@example.com")));
+
+        List<ServiceContact> afterSecond = contactRepository.findByServiceId(claude.getId());
+        // İki contact var (eski + yeni) ama TAM OLARAK BİRİ primary olmalı.
+        long primaryCount = afterSecond.stream().filter(ServiceContact::isPrimary).count();
+        assertThat(primaryCount).isEqualTo(1L);
+        // ...ve o primary EN YENİ e-postadır.
+        ServiceContact primary = afterSecond.stream()
+                .filter(ServiceContact::isPrimary).findFirst().orElseThrow();
+        assertThat(primary.getEmail()).isEqualTo("new@example.com");
+
+        // findByServiceIdIn (primary DESC, id ASC) ilk sırada doğru (yeni) e-postayı döner.
+        ServiceContact firstByQuery = contactRepository
+                .findByServiceIdIn(List.of(claude.getId())).get(0);
+        assertThat(firstByQuery.getEmail()).isEqualTo("new@example.com");
+    }
+
+    private byte[] buildClaudeWithEmail(String email) {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Servisler");
+            Row header = sheet.createRow(0);
+            String[] headers = {"Hizmet", "Sağlayıcı", "Kart", "Frekans", "Aktif",
+                    "Aktif Aylar", "Yaklaşık Tutar (TL)", "Fatura E-posta",
+                    "Fatura Kaynağı", "Notlar"};
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("Claude AI");
+            r1.createCell(1).setCellValue("Anthropic");
+            r1.createCell(2).setCellValue("****3909");
+            r1.createCell(3).setCellValue("Aylık");
+            r1.createCell(4).setCellValue("Evet");
+            r1.createCell(7).setCellValue(email);
+            r1.createCell(8).setCellValue("Servis paneli");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private com.ecommint.accounthr.domain.Service findServiceOrNull(String name) {
+        return serviceRepository.findAll().stream()
+                .filter(s -> name.equals(s.getName()))
+                .findFirst()
+                .orElse(null);
+    }
+
     private com.ecommint.accounthr.domain.Service findService(String name) {
         return serviceRepository.findAll().stream()
                 .filter(s -> name.equals(s.getName()))

@@ -176,6 +176,32 @@ class DriveSyncServiceTest {
     }
 
     @Test
+    void deleteRejectsControlCharsAndNonAsciiFileNames() {
+        // FIX 10: \n / \r (log injection) ve ASCII-dışı karakterler reddedilir; rclone'a
+        // ulaşmadan validation hatası (400 alt sınıfı) atılır.
+        FakeCommandRunner runner = FakeCommandRunner.returning(new CommandResult(0, "", ""));
+        DriveSyncService svc = new DriveSyncService(props(true), storage(), runner);
+
+        assertThatThrownBy(() -> svc.deleteFromWaiting("aws\n.pdf"))
+                .isInstanceOf(DriveSyncValidationException.class)
+                .isInstanceOf(DriveSyncException.class);
+        assertThatThrownBy(() -> svc.deleteFromWaiting("aws\r.pdf"))
+                .isInstanceOf(DriveSyncValidationException.class);
+        assertThatThrownBy(() -> svc.deleteFromWaiting("aws\t.pdf"))
+                .isInstanceOf(DriveSyncValidationException.class);
+        // ASCII-dışı (Türkçe karakter dahil) reddedilir.
+        assertThatThrownBy(() -> svc.deleteFromWaiting("faturağ.pdf"))
+                .isInstanceOf(DriveSyncValidationException.class);
+
+        // Hiçbiri rclone'a ulaşmamalı.
+        assertThat(runner.invocations).isEmpty();
+
+        // Düz yazdırılabilir-ASCII ad geçerlidir (regresyon koruması).
+        svc.deleteFromWaiting("aws_subat.pdf");
+        assertThat(runner.invocations).hasSize(1);
+    }
+
+    @Test
     void deleteDisabledIsNoOpAndRunnerNeverInvoked() {
         FakeCommandRunner runner = FakeCommandRunner.returning(new CommandResult(0, "", ""));
         DriveSyncService svc = new DriveSyncService(props(false), storage(), runner);

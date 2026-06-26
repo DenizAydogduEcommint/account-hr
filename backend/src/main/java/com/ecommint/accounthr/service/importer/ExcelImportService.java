@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -139,6 +140,13 @@ public class ExcelImportService {
 
         boolean informational = false; // bölüm-başlığından sonra true olur
 
+        // Bu import-pass'te iş-anahtarı (period|hizmet|currency|amount|amountTry|tarih)
+        // başına görülen kopya sayısı. Aynı sheet'te byte-aynı iki veri satırını
+        // birbirinden ayırmak için kullanılır (1. görülen → eksiz; 2. → "#2", ...).
+        // FİZİKSEL satır indeksi (rowIndex) hash'e GİRMEZ: bir satır eklenip kaydırılınca
+        // alttaki tüm satırların hash'i değişip yeniden duplicate import edilmesini önler.
+        Map<String, Integer> businessKeyOccurrences = new HashMap<>();
+
         int lastRow = sheet.getLastRowNum();
         // Row 0 = header; veri row 1'den başlar (0-indexed).
         for (int r = 1; r <= lastRow; r++) {
@@ -167,7 +175,8 @@ public class ExcelImportService {
             }
 
             sheetSummary.incrementRowsRead();
-            importDataRow(row, r, period, periodCode, informational, sheetSummary, dataFormatter);
+            importDataRow(row, r, period, periodCode, informational, sheetSummary, dataFormatter,
+                    businessKeyOccurrences);
         }
 
         return sheetSummary;
@@ -175,7 +184,8 @@ public class ExcelImportService {
 
     private void importDataRow(Row row, int rowIndex, Period period, String periodCode,
                                boolean informational, ImportSummary.SheetSummary sheetSummary,
-                               DataFormatter dataFormatter) {
+                               DataFormatter dataFormatter,
+                               Map<String, Integer> businessKeyOccurrences) {
         String serviceName = normalize(getString(row, COL_SERVICE, dataFormatter));
         String providerName = normalize(getString(row, COL_PROVIDER, dataFormatter));
         if (serviceName.isEmpty()) {
@@ -194,8 +204,14 @@ public class ExcelImportService {
         InvoiceStatus status = parseStatus(getString(row, COL_STATUS, dataFormatter));
         String invoiceNote = blankToNull(getString(row, COL_NOTE, dataFormatter));
 
+        // İş-anahtarı içindeki kopya sırasını (occurrence) bu pass'te say: ilk görülen → 0
+        // (suffix yok), ikinci byte-aynı satır → 1 ("#2"), ... Böylece aynı sheet'teki gerçek
+        // duplicate satırlar ayrı ayrı import edilir; pozisyon (rowIndex) hash'i ETKİLEMEZ.
+        String businessKey = businessKey(periodCode, serviceName, currency, amount, amountTry,
+                transactionDate);
+        int occurrence = businessKeyOccurrences.merge(businessKey, 1, Integer::sum) - 1;
         String hash = computeRowHash(periodCode, serviceName, currency, amount, amountTry,
-                transactionDate, rowIndex);
+                transactionDate, occurrence);
         if (expenseRepository.existsBySourceRowHash(hash)) {
             log.warn("Duplicate satır atlandı (aynı sourceRowHash): sheet={}, row={}, "
                     + "hizmet='{}', tarih={}, tutar={}, tlKarsiligi={}",
@@ -250,12 +266,18 @@ public class ExcelImportService {
         if (row == null || isRowEmpty(row, dataFormatter)) {
             return RowClass.EMPTY;
         }
-        // TOPLAM satırı: herhangi bir hücrede "TOPLAM:" geçer (genelde 5. kolon).
-        for (int c = 0; c <= LAST_COL; c++) {
-            String v = getString(row, c, dataFormatter).trim();
-            String upper = v.toUpperCase(java.util.Locale.forLanguageTag("tr"));
-            if (upper.contains("TOPLAM:")) {
-                return RowClass.TOTAL;
+        // TOPLAM satırı: "TOPLAM:" yalnızca etiket/tutar kolonlarında (0..COL_AMOUNT_TRY)
+        // aranır — serbest-metin Fatura Notu (COL_NOTE) DAHİL EDİLMEZ. Ayrıca pozisyonel
+        // koruma: gerçek bir TOPLAM satırının Hizmet (COL_SERVICE) hücresi BOŞtur; Hizmet
+        // dolu olan satır bir VERİ satırıdır (notunda "TOPLAM:" geçse bile) → TOTAL sayılmaz.
+        boolean serviceEmpty = getString(row, COL_SERVICE, dataFormatter).trim().isEmpty();
+        if (serviceEmpty) {
+            for (int c = 0; c <= COL_AMOUNT_TRY; c++) {
+                String v = getString(row, c, dataFormatter).trim();
+                String upper = v.toUpperCase(java.util.Locale.forLanguageTag("tr"));
+                if (upper.contains("TOPLAM:")) {
+                    return RowClass.TOTAL;
+                }
             }
         }
         // Bölüm başlığı: 1. kolon (Tarih) metni Multinet/Sağlık Sigortası ile başlar,
@@ -485,19 +507,40 @@ public class ExcelImportService {
     }
 
     /**
-     * Stabil SHA-256: (period | normalize(service) | currency | amount | amountTry |
-     * transactionDate | rowIndex). Null alanlar boş string ile temsil edilir.
+     * Stabil iş-anahtarı: (period | normalize(service) | currency | amount | amountTry |
+     * transactionDate). Null alanlar boş string ile temsil edilir. Bu anahtar dosyadaki
+     * FİZİKSEL satır konumundan BAĞIMSIZDIR — re-import'ta satır eklenip kaydırılsa bile
+     * aynı kalır.
      */
-    String computeRowHash(String periodCode, String serviceName, Currency currency,
-                          BigDecimal amount, BigDecimal amountTry, LocalDate date, int rowIndex) {
-        String payload = String.join("|",
+    private String businessKey(String periodCode, String serviceName, Currency currency,
+                               BigDecimal amount, BigDecimal amountTry, LocalDate date) {
+        return String.join("|",
                 nz(periodCode),
                 normalize(serviceName).toLowerCase(java.util.Locale.ROOT),
                 currency == null ? "" : currency.name(),
                 amount == null ? "" : amount.stripTrailingZeros().toPlainString(),
                 amountTry == null ? "" : amountTry.stripTrailingZeros().toPlainString(),
-                date == null ? "" : date.toString(),
-                Integer.toString(rowIndex));
+                date == null ? "" : date.toString());
+    }
+
+    /**
+     * Stabil SHA-256: iş-anahtarı (bkz. {@link #businessKey}) + yalnızca aynı pass içinde
+     * ÇARPIŞMA olduğunda eklenen kopya-sayacı son-eki. {@code occurrence == 0} → ek YOK
+     * (1. görülen satır); {@code occurrence >= 1} → {@code "#<occurrence+1>"} (2. byte-aynı
+     * satır "#2", 3. "#3", ...). Böylece:
+     * <ul>
+     *   <li>Re-import pozisyona karşı stabildir (rowIndex hash'e girmez → kaydırma duplicate
+     *       yaratmaz).</li>
+     *   <li>Aynı sheet'teki gerçek byte-aynı iki satır yine de ayrı import edilir (sayaç
+     *       son-eki farklı hash üretir).</li>
+     * </ul>
+     */
+    String computeRowHash(String periodCode, String serviceName, Currency currency,
+                          BigDecimal amount, BigDecimal amountTry, LocalDate date, int occurrence) {
+        String payload = businessKey(periodCode, serviceName, currency, amount, amountTry, date);
+        if (occurrence > 0) {
+            payload = payload + "#" + (occurrence + 1);
+        }
         return sha256Hex(payload);
     }
 

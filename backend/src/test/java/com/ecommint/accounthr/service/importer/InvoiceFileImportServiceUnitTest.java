@@ -37,9 +37,31 @@ class InvoiceFileImportServiceUnitTest {
         assertThat(InvoiceFileImportService.baseName("aws_mart.xml")).isEqualTo("aws_mart");
         assertThat(InvoiceFileImportService.baseName("aws_mart_statement.pdf")).isEqualTo("aws_mart");
         assertThat(InvoiceFileImportService.baseName("aws_mart_receipt.pdf")).isEqualTo("aws_mart");
+        // FIX 5: _refund de bilinen türev ektir → ana faturanın kardeşi sayılır.
+        assertThat(InvoiceFileImportService.baseName("aws_mart_refund.pdf")).isEqualTo("aws_mart");
         // Bilinmeyen ek korunur (yanlış kardeşlik kurmamak için).
         assertThat(InvoiceFileImportService.baseName("claude_ai_mart_1.pdf"))
                 .isEqualTo("claude_ai_mart_1");
+    }
+
+    @Test
+    void folderBaseKey_refundSiblingDerivesMainBaseKey() {
+        // FIX 5: aws_mart_refund.pdf → türev taban aws_mart (ana faturayla aynı baseKey).
+        assertThat(InvoiceFileImportService.folderBaseKey("2026-03/aws_mart_refund.pdf"))
+                .isEqualTo("2026-03/aws_mart");
+    }
+
+    // --- isExactBaseNote (FIX 3) ------------------------------------------
+
+    @Test
+    void isExactBaseNote_trueForPlainBaseFalseForDerived() {
+        // Tam taban dosya adı (türev ek yok) → true.
+        assertThat(InvoiceFileImportService.isExactBaseNote("2026-03/aws_mart.pdf")).isTrue();
+        assertThat(InvoiceFileImportService.isExactBaseNote("aws_mart.xml")).isTrue();
+        // Türev formlar → false (çakışan baseKey'de tam taban tercih edilir).
+        assertThat(InvoiceFileImportService.isExactBaseNote("2026-03/aws_mart_statement.pdf")).isFalse();
+        assertThat(InvoiceFileImportService.isExactBaseNote("2026-03/aws_mart_receipt.pdf")).isFalse();
+        assertThat(InvoiceFileImportService.isExactBaseNote("2026-03/aws_mart_refund.pdf")).isFalse();
     }
 
     // --- folderBaseKey ----------------------------------------------------

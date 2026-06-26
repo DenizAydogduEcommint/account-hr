@@ -242,5 +242,41 @@ public class DriveSyncService {
             throw new DriveSyncValidationException(
                     "Geçersiz dosya adı (yol ayırıcı/traversal): " + fileName);
         }
+        // Kontrol karakterleri (özellikle \n / \r → log injection) ve ASCII-dışı/non-printable
+        // karakterler reddedilir: yalnızca yazdırılabilir ASCII (0x20..0x7E) kabul edilir.
+        // 0x20 (boşluk) traversal kontrollerinden geçer; yine de yazdırılabilir olduğundan ada
+        // izin verilir (rclone tek-dosya silmede sorun değil), ama \n/\r gibi kontrol karakterleri
+        // log'a yazılmadan ÖNCE burada reddedilir.
+        for (int i = 0; i < fileName.length(); i++) {
+            char ch = fileName.charAt(i);
+            if (ch < 0x20 || ch >= 0x7F) {
+                throw new DriveSyncValidationException(
+                        "Geçersiz dosya adı (kontrol/ASCII-dışı karakter): " + describeForLog(fileName));
+            }
+        }
+    }
+
+    /**
+     * Geçersiz adı log/exception'a güvenli yazmak için kontrol karakterlerini görünür
+     * kaçışlara çevirir ({@code \n}, {@code \r}, {@code \t}; diğerleri {@code \\uXXXX}).
+     * Böylece reddedilen ad bile log injection'a yol açmaz.
+     */
+    private static String describeForLog(String fileName) {
+        StringBuilder sb = new StringBuilder(fileName.length() + 8);
+        for (int i = 0; i < fileName.length(); i++) {
+            char ch = fileName.charAt(i);
+            if (ch == '\n') {
+                sb.append("\\n");
+            } else if (ch == '\r') {
+                sb.append("\\r");
+            } else if (ch == '\t') {
+                sb.append("\\t");
+            } else if (ch < 0x20 || ch >= 0x7F) {
+                sb.append(String.format("\\u%04X", (int) ch));
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
     }
 }

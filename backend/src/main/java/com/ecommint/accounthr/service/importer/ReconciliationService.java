@@ -408,12 +408,22 @@ public class ReconciliationService {
             return 0L;
         }
         try (Stream<Path> walk = Files.walk(rootPath)) {
-            return walk.filter(Files::isRegularFile).count();
+            // Yarım kalmış atomik-yazma artıkları (.upload-*.tmp / .copy-*.tmp) gerçek
+            // kalıcı dosya DEĞİLDİR → sayıma girmemeli. Aksi halde fiziksel sayı şişer ve
+            // tutarsızlık notu yanlışlıkla SHA-256 dedup'ını suçlardı.
+            return walk.filter(Files::isRegularFile)
+                    .filter(p -> !isTempFile(p))
+                    .count();
         } catch (IOException e) {
             log.warn("Storage kökü taranamadı ({}): {} — fiziksel dosya sayısı belirlenemedi.",
                     root, e.getMessage());
             return -1L; // sentinel: tarama başarısız (mutabakat abort edilmez)
         }
+    }
+
+    /** Atomik-yazma geçici dosyası mı? ({@code .upload-<...>.tmp} / {@code .copy-<...>.tmp}). */
+    private static boolean isTempFile(Path p) {
+        return p.getFileName().toString().matches("\\.(upload|copy)-.+\\.tmp");
     }
 
     private Map<InvoiceStatus, Long> statusDistribution() {
@@ -435,8 +445,9 @@ public class ReconciliationService {
     private Map<String, String> idempotencyKeys() {
         Map<String, String> keys = new LinkedHashMap<>();
         keys.put("expense (E2-01)",
-                "source_row_hash — SHA-256(period|hizmet|currency|amount|amountTry|tarih|rowIndex); "
-                        + "aynı hash varsa satır atlanır.");
+                "source_row_hash — SHA-256(period|hizmet|currency|amount|amountTry|tarih) "
+                        + "+ pass-içi kopya-sayacı son-eki; aynı hash varsa satır atlanır "
+                        + "(fiziksel satır konumundan bağımsız → re-import pozisyona stabil).");
         keys.put("service (E2-02)",
                 "normalize(hizmet) + provider — büyük/küçük harf duyarsız UPSERT; "
                         + "eşleşen servis güncellenir, yenisi oluşturulmaz.");

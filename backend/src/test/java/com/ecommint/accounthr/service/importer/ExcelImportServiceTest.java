@@ -285,6 +285,171 @@ class ExcelImportServiceTest {
         assertThat(expenseRepository.findAll()).hasSize(5);
     }
 
+    /**
+     * FIX 1: re-import pozisyona STABİL. Veri satırlarının ÜSTÜNE boş bir satır eklenip
+     * sheet yeniden export edilse bile (alttaki satırların fiziksel indeksi kayar)
+     * değişmeyen satırlar YENİDEN duplicate import EDİLMEZ. Eski algoritmada hash
+     * rowIndex içerdiği için her kaydırma yeni hash → duplicate üretirdi.
+     */
+    @Test
+    void reimportWithInsertedBlankRowAboveDoesNotDuplicate() {
+        // 1. import: 4 operasyonel satır (orijinal düzen).
+        byte[] original = buildSimpleSheet(false);
+        ImportSummary first = importService.importMonthlySheets(new ByteArrayInputStream(original));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(first.getTotalImported()).isEqualTo(2);
+        assertThat(expenseRepository.findAll()).hasSize(2);
+
+        // 2. import: AYNI veri ama üstte boş satır eklenmiş (tüm veri satırları 1 aşağı kaydı).
+        byte[] shifted = buildSimpleSheet(true);
+        ImportSummary second = importService.importMonthlySheets(new ByteArrayInputStream(shifted));
+        entityManager.flush();
+        entityManager.clear();
+
+        // Pozisyon değişti ama iş-anahtarı aynı → 0 yeni, hepsi duplicate. Toplam çiftlenmedi.
+        assertThat(second.getTotalImported()).isEqualTo(0);
+        assertThat(second.getSheets().get(0).getSkippedDuplicate()).isEqualTo(2);
+        assertThat(expenseRepository.findAll()).hasSize(2);
+    }
+
+    /**
+     * FIX 1: aynı sheet'te byte-AYNI iki veri satırı (aynı period|hizmet|currency|amount|
+     * amountTry|tarih) → İKİSİ de import edilir (pass-içi kopya-sayacı son-eki farklı hash
+     * üretir). Re-import yine 0 yeni (idempotent).
+     */
+    @Test
+    void twoByteIdenticalDataRowsAreBothImportedThenIdempotent() {
+        byte[] wb = buildDuplicateRowsSheet();
+
+        ImportSummary first = importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        // İki özdeş satır → ikisi de import (sayaç son-eki sayesinde).
+        assertThat(first.getTotalImported()).isEqualTo(2);
+        assertThat(expenseRepository.findAll()).hasSize(2);
+
+        // Re-import: 0 yeni (sayaç deterministik → aynı iki hash yeniden üretilir).
+        ImportSummary second = importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(second.getTotalImported()).isEqualTo(0);
+        assertThat(second.getSheets().get(0).getSkippedDuplicate()).isEqualTo(2);
+        assertThat(expenseRepository.findAll()).hasSize(2);
+    }
+
+    /**
+     * FIX 8: Fatura Notu (serbest metin, COL_NOTE) içinde "TOPLAM:" geçen bir VERİ satırı
+     * yanlışlıkla TOPLAM satırı sanılıp DÜŞMEMELİ. Hizmet kolonu dolu olduğundan satır
+     * gerçek bir harcamadır → import edilir.
+     */
+    @Test
+    void dataRowWithToplamInNoteIsImportedNotSkipped() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(1).setCellValue("Vercel");
+            r1.createCell(2).setCellValue("Vercel Inc");
+            r1.createCell(3).setCellValue(15.0);
+            r1.createCell(4).setCellValue("USD");
+            r1.createCell(5).setCellValue(500.0);
+            r1.createCell(6).setCellValue("****3800");
+            r1.createCell(10).setCellValue("Bulundu");
+            // Notta "TOPLAM:" geçiyor — eski kodda satır TOTAL sanılıp düşerdi.
+            r1.createCell(11).setCellValue("Aylık TOPLAM: faturası; bkz panel");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+
+            ImportSummary summary = importService.importMonthlySheets(
+                    new ByteArrayInputStream(bos.toByteArray()));
+            entityManager.flush();
+            entityManager.clear();
+
+            assertThat(summary.getTotalImported()).isEqualTo(1);
+            List<Expense> expenses = expenseRepository.findAll();
+            assertThat(expenses).hasSize(1);
+            assertThat(expenses.get(0).getService().getName()).isEqualTo("Vercel");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void writeHeader(Sheet sheet) {
+        Row header = sheet.createRow(0);
+        String[] headers = {"Tarih", "Hizmet", "Sağlayıcı", "Tutar", "Para Birimi",
+                "TL Karşılığı", "Kart", "Kullanan Takım", "Amaç", "Muhasebe E-posta",
+                "Fatura Durumu", "Fatura Notu"};
+        for (int i = 0; i < headers.length; i++) {
+            header.createCell(i).setCellValue(headers[i]);
+        }
+    }
+
+    /**
+     * 2 operasyonel satır içeren basit bir "Mart" sheet'i. {@code shiftDown=true} ise
+     * veri satırlarının ÜSTÜNE boş bir satır eklenir (fiziksel indeksleri kaydırır) —
+     * iş-anahtarları değişmez.
+     */
+    private byte[] buildSimpleSheet(boolean shiftDown) {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            int base = shiftDown ? 2 : 1; // shiftDown → row1 boş bırakılır, veri row2'den
+
+            Row a = sheet.createRow(base);
+            a.createCell(1).setCellValue("Claude AI");
+            a.createCell(2).setCellValue("Anthropic");
+            a.createCell(3).setCellValue(20.0);
+            a.createCell(4).setCellValue("USD");
+            a.createCell(5).setCellValue(700.0);
+            a.createCell(6).setCellValue("****3909");
+            a.createCell(10).setCellValue("Bulundu");
+
+            Row b = sheet.createRow(base + 1);
+            b.createCell(1).setCellValue("AWS");
+            b.createCell(2).setCellValue("Amazon");
+            b.createCell(3).setCellValue(10.0);
+            b.createCell(4).setCellValue("USD");
+            b.createCell(5).setCellValue(350.0);
+            b.createCell(6).setCellValue("****3800");
+            b.createCell(10).setCellValue("Bekleniyor");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** İki byte-AYNI veri satırı içeren "Mart" sheet'i (aynı iş-anahtarı). */
+    private byte[] buildDuplicateRowsSheet() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            for (int r = 1; r <= 2; r++) {
+                Row row = sheet.createRow(r);
+                row.createCell(1).setCellValue("Twilio");
+                row.createCell(2).setCellValue("Twilio Inc");
+                row.createCell(3).setCellValue(9.99);
+                row.createCell(4).setCellValue("USD");
+                row.createCell(5).setCellValue(330.0);
+                row.createCell(6).setCellValue("****3909");
+                row.createCell(10).setCellValue("Bulundu");
+            }
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private Expense findByService(List<Expense> expenses, String serviceName) {
         return expenses.stream()
                 .filter(e -> serviceName.equals(e.getService().getName()))

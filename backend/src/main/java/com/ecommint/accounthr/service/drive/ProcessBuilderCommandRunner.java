@@ -8,9 +8,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.springframework.stereotype.Component;
 
@@ -67,14 +65,13 @@ public class ProcessBuilderCommandRunner implements CommandRunner {
             if (!finished) {
                 throw timedOut(process, stdoutF, stderrF, args.get(0), timeout);
             }
-            // Süreç EXIT etti; geriye yalnızca boruların boşalması (drain) kaldı — bu artık
-            // komut bütçesiyle değil, drenaj gecikmesiyle sınırlıdır. Komut bütçeye yakın
-            // çalıştıysa remainingMillis 0 olur ve get(0, MILLIS) BEKLEMEDEN TimeoutException
-            // atar → başarılı bir kopyala/sil yanlışlıkla "zaman aşımı" raporlanırdı. Bu yüzden
-            // drenaja makul bir TABAN süre verilir (gerçek timeout/kill yolu finished==false'ta,
-            // yukarıda kalır — o yol değişmedi).
-            long readBudget = drainBudget(remainingMillis(deadline));
-            CompletableFuture.allOf(stdoutF, stderrF).get(readBudget, TimeUnit.MILLISECONDS);
+            // Süreç EXIT etti → boruların boşalması (drain) artık SINIRSIZ beklenir. Ölü bir
+            // sürecin stdout/stderr boruları SONLUDUR (yazan taraf kapandı) ve mutlaka EOF'a
+            // ulaşır; reader'lar readAllBytes()'ı tamamlar. Burada timeout vermek (eski
+            // max(remaining,5s)) BÜYÜK bir rclone stderr'inde yanlışlıkla zaman aşımı atıp
+            // başarılı kopyala/sil'i 502 olarak raporlardı. allOf(...).join() EOF'a kadar bekler.
+            // (Gerçek timeout/kill yolu finished==false'ta yukarıda kalır — değişmedi.)
+            CompletableFuture.allOf(stdoutF, stderrF).join();
             return new CommandResult(process.exitValue(), stdoutF.join(), stderrF.join());
         } catch (InterruptedException e) {
             process.destroyForcibly();
@@ -82,9 +79,9 @@ public class ProcessBuilderCommandRunner implements CommandRunner {
             stderrF.cancel(true);
             Thread.currentThread().interrupt();
             throw new CommandExecutionException("Komut beklenirken kesinti oldu: " + args.get(0), e);
-        } catch (TimeoutException e) {
-            throw timedOut(process, stdoutF, stderrF, args.get(0), timeout);
-        } catch (ExecutionException | CompletionException e) {
+        } catch (CompletionException e) {
+            // allOf(...).join() drenaj sırasında bir reader UncheckedIOException ile patlarsa
+            // CompletionException sarmalar (artık get(...) yok → ExecutionException oluşmaz).
             process.destroyForcibly();
             throw new CommandExecutionException("Komut çıktısı okunamadı: " + args.get(0), e);
         }

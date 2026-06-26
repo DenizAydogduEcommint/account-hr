@@ -120,11 +120,14 @@ class InvoiceFileImportIT extends AbstractDataCleanupIT {
         service.setActiveState(ActiveState.YES);
         serviceRepository.save(service);
 
-        Period period = new Period();
-        period.setYear(2026);
-        period.setMonth(3);
-        period.setCode("2026-03");
-        periodRepository.save(period);
+        // Period code tekildir; aynı testte birden çok kez çağrılırsa var olanı yeniden kullan.
+        Period period = periodRepository.findByCode("2026-03").orElseGet(() -> {
+            Period p = new Period();
+            p.setYear(2026);
+            p.setMonth(3);
+            p.setCode("2026-03");
+            return periodRepository.save(p);
+        });
 
         Expense expense = new Expense();
         expense.setService(service);
@@ -266,6 +269,84 @@ class InvoiceFileImportIT extends AbstractDataCleanupIT {
         assertThat(second.copied()).isZero();
         assertThat(fileAssetRepository.count()).isEqualTo(1);
         assertThat(countPhysicalFiles(storageRoot)).isEqualTo(1L);
+    }
+
+    /**
+     * FIX 2: AYNI içerikli iki dosya FARKLI iki faturaya eşleşiyorsa, ikincisi SESSİZCE
+     * atlanmamalı. V9 kısmi-tekil index ikinci FileAsset satırına izin vermediğinden tam
+     * junction kapsam dışıdır; ama ikinci dosya "içerik-aynı, başka faturaya bağlı" notuyla
+     * unmatched RAPORLANMALI (görünmez kalmamalı).
+     */
+    @Test
+    void identicalContentMatchingTwoDifferentInvoices_secondIsReported() throws IOException {
+        deleteRecursively(sourceDir.resolve("2026-03"));
+        deleteRecursively(sourceDir.resolve("trash"));
+        invoiceRepository.deleteAll();
+
+        // İki AYRI fatura, FARKLI note path'leri.
+        Invoice invA = seedInvoiceWithNote("ServiceA", "faturalar/2026-03/svc_a.pdf");
+        Invoice invB = seedInvoiceWithNote("ServiceB", "faturalar/2026-03/svc_b.pdf");
+
+        // İki FİZİKEN AYRI dosya, AYNI içerik; her biri ayrı faturanın note'una eşleşir.
+        Path month = Files.createDirectories(sourceDir.resolve("2026-03"));
+        String identical = "byte-identical-shared-content";
+        write(month.resolve("svc_a.pdf"), identical);
+        write(month.resolve("svc_b.pdf"), identical);
+
+        InvoiceFileImportSummary summary = importService.scanAndImport(sourceDir);
+
+        // İlk dosya (sorted: svc_a < svc_b) kopyalandı + invA'ya bağlandı.
+        assertThat(summary.copied()).isEqualTo(1);
+        assertThat(summary.newFileRows()).isEqualTo(1);
+        assertThat(summary.matched()).isEqualTo(1);
+        assertThat(fileAssetRepository.findByInvoiceId(invA.getId())).hasSize(1);
+        // invB DOSYASIZ kaldı (V9 ikinci satıra izin vermez) AMA sessiz değil:
+        assertThat(fileAssetRepository.findByInvoiceId(invB.getId())).isEmpty();
+        assertThat(summary.duplicates()).isEqualTo(1);
+        assertThat(summary.unmatched()).isEqualTo(1);
+        assertThat(summary.unmatchedFiles())
+                .anySatisfy(s -> assertThat(s)
+                        .contains("2026-03/svc_b.pdf")
+                        .contains("içerik-aynı"));
+    }
+
+    /**
+     * FIX 3: iki invoice note'u AYNI folderBaseKey'e düşerse (ör. {@code aws_mart.pdf} ve
+     * {@code aws_mart_statement.pdf} → ikisi de baseKey {@code 2026-03/aws_mart}), bir
+     * kardeş dosya ({@code aws_mart.xml}, tam note eşleşmesi YOK) YANLIŞ faturaya
+     * bağlanmamalı. Tam-taban note'lu fatura tercih edilir; belirsizse kardeş unmatched olur.
+     */
+    @Test
+    void siblingIsNotMisattachedWhenTwoNotesCollideOnBaseKey() throws IOException {
+        deleteRecursively(sourceDir.resolve("2026-03"));
+        deleteRecursively(sourceDir.resolve("trash"));
+        invoiceRepository.deleteAll();
+
+        // İki fatura, note'ları AYNI baseKey'e düşer: biri tam taban, biri türev (_statement).
+        Invoice exact = seedInvoiceWithNote("ExactBase", "faturalar/2026-03/aws_mart.pdf");
+        Invoice derived = seedInvoiceWithNote("DerivedBase", "faturalar/2026-03/aws_mart_statement.pdf");
+
+        Path month = Files.createDirectories(sourceDir.resolve("2026-03"));
+        // Her note'un kendi dosyası (tam eşleşir) + bir KARDEŞ (.xml, tam note eşleşmesi yok).
+        write(month.resolve("aws_mart.pdf"), "a");
+        write(month.resolve("aws_mart_statement.pdf"), "b");
+        write(month.resolve("aws_mart.xml"), "c");
+
+        importService.scanAndImport(sourceDir);
+
+        // Tam note eşleşmeleri doğru: .pdf → exact, _statement.pdf → derived.
+        assertThat(fileAssetRepository.findByInvoiceId(exact.getId()))
+                .extracting(FileAsset::getFileName)
+                .contains("aws_mart.pdf");
+        assertThat(fileAssetRepository.findByInvoiceId(derived.getId()))
+                .extracting(FileAsset::getFileName)
+                .contains("aws_mart_statement.pdf");
+
+        // Kardeş aws_mart.xml: baseKey çakışmasında TAM TABAN'lı (exact) fatura tercih edilir
+        // → türev (derived) faturaya YANLIŞ bağlanmaz.
+        FileAsset xml = fileAssetRepository.findByFilePath("2026-03/aws_mart.xml").get(0);
+        Long xmlInvoiceId = xml.getInvoice() != null ? xml.getInvoice().getId() : null;
+        assertThat(xmlInvoiceId).isNotEqualTo(derived.getId());
     }
 
     /** Storage kökü altındaki gerçek dosya sayısı (dizinler hariç). */

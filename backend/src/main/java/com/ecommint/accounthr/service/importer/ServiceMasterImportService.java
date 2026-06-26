@@ -348,8 +348,7 @@ public class ServiceMasterImportService {
                 if (sourceRaw != null) {
                     c.setSource(sourceRaw);
                 }
-                c.setPrimary(true);
-                serviceContactRepository.save(c);
+                markPrimary(c, existing);
                 return false;
             }
         }
@@ -357,9 +356,31 @@ public class ServiceMasterImportService {
         contact.setService(service);
         contact.setEmail(email);
         contact.setSource(sourceRaw);
-        contact.setPrimary(true);
+        // "Tam olarak bir primary" değişmezi: yeni contact primary olur, mevcut tüm
+        // contact'lar primary=false yapılır. Aksi halde e-posta düzeltildiğinde (yeni
+        // satır) İKİ primary kalır; findByServiceIdIn `primary DESC, id ASC` ile ESKİ
+        // (yanlış) e-postayı döner → hatırlatmalar yanlış adrese gider.
+        markPrimary(contact, existing);
         serviceContactRepository.save(contact);
         return true;
+    }
+
+    /**
+     * {@code target}'ı bu servisin TEK primary contact'ı yapar: diğer tüm contact'ların
+     * {@code isPrimary}'sini false'a çeker, target'ı true yapar ve hepsini kaydeder
+     * (idempotent — zaten doğru olanlar yeniden yazılsa da sonuç aynı). Böylece servis
+     * başına en fazla bir primary invariant'ı korunur.
+     */
+    private void markPrimary(ServiceContact target,
+                             List<ServiceContact> existing) {
+        for (ServiceContact c : existing) {
+            if (c != target && c.isPrimary()) {
+                c.setPrimary(false);
+                serviceContactRepository.save(c);
+            }
+        }
+        target.setPrimary(true);
+        serviceContactRepository.save(target);
     }
 
     // ---------------------------------------------------------------------------
@@ -553,12 +574,21 @@ public class ServiceMasterImportService {
         return true;
     }
 
-    /** Savunmacı footer/total tespiti: herhangi bir hücrede "TOPLAM" geçiyorsa. */
+    /**
+     * Savunmacı footer/total tespiti. {@link ExcelImportService}'in daha sıkı kontrolüyle
+     * uyumlu: yalnızca "TOPLAM:" (iki nokta DAHİL) sayılır ve serbest-metin Hizmet
+     * ({@link #COL_HIZMET}) / Notlar ({@link #COL_NOTLAR}) kolonları TARANMAZ. Aksi halde
+     * adı/notu "toplam" içeren gerçek bir servis ("ara toplam yansıtması" vb.) sessizce
+     * footer sanılıp düşerdi.
+     */
     private boolean isFooterRow(Row row, DataFormatter dataFormatter) {
         for (int c = 0; c <= LAST_COL; c++) {
+            if (c == COL_HIZMET || c == COL_NOTLAR) {
+                continue; // serbest-metin kolonları footer sinyali değildir
+            }
             String v = getString(row, c, dataFormatter)
                     .toUpperCase(Locale.forLanguageTag("tr"));
-            if (v.contains("TOPLAM")) {
+            if (v.contains("TOPLAM:")) {
                 return true;
             }
         }

@@ -68,7 +68,7 @@ public class Service extends BaseEntity {
      * (ör. "2026-01, 2026-02, 2026-03"). Bilgi amaçlı; modelde service↔period
      * ilişkisi olmadığı için verbatim saklanır (E2-02).
      */
-    @Column(name = "active_months", length = 255)
+    @Column(name = "active_months", columnDefinition = "TEXT")
     private String activeMonths;
 
     public String getName() {

@@ -18,6 +18,14 @@
 - **Perf:** 2× contact N+1 (ExpenseQuery + ServiceQuery batch'lendi). **Frontend:** 3× subscription leak (ngOnDestroy).
 - **Kalan borç:** file per-invoice ownership → E3-08; ana-satır lazy N+1 → E3-03-1 (kısmen, contact N+1 çözüldü).
 
+**E2 DERİN CODE REVIEW (3 ajan + ultrathink, 2026-06-26):** Migrasyon katmanı (E2-01..06) dar+derin tarandı. **11 bulgu, hepsi düzeltildi** (backend 198 test, +12). Sessiz muhasebe-veri/güvenlik sorunları:
+- **C4 (en kritik):** `computeRowHash` rowIndex içeriyordu → Excel satır eklenince re-import çift kayıt. Fix: rowIndex çıkarıldı + same-pass collision counter. **Dev DB re-seed edildi (yeni hash); idempotency gerçek veride doğrulandı (2. import 0 yeni).**
+- **C1:** byte-identical PDF → 2. invoice sessizce dosyasız kalıyordu → artık unmatched raporlanıyor (tam multi-invoice junction → borç E2-DR-1).
+- **C2:** baseKey çakışmasında sibling yanlış invoice'a → exact-basename önceliği + belirsizse uyarı.
+- **C3:** çoklu primary contact (hatırlatma yanlış e-postaya) → tek-primary invariant.
+- **I:** `_refund` suffix, `.tmp` sayımı, isFooterRow/classifyRow "TOPLAM" aşırı-drop, ProcessBuilder drain join (false 502), validateFileName control-char, active_months→TEXT (V10).
+- **Borç E2-DR-1:** SHA-256 içerik-aynı dosyanın iki farklı invoice'a tam bağlanması (junction/ManyToMany) → V9 unique kısıtı nedeniyle ertelendi; şimdilik raporlanıyor.
+
 ---
 
 ## E1 — Temel Altyapı & Veri Modeli

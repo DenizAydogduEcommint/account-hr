@@ -49,7 +49,7 @@ public class MissingInvoiceController {
      * bulunulan ay; iyi-biçimli ama bilinmeyen ay boş liste döner; biçimsiz → 400.
      */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(
             summary = "Bir ayda faturası eksik servisler",
             description = "Servis ↔ ay çapraz doğrulama: Aktif=Evet, bilgi-amaçlı olmayan "

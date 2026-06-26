@@ -4,6 +4,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,6 +43,7 @@ public class DashboardController {
      * bulunulan ay kodu kullanılır; o dönem yoksa yine sıfırlanmış özet döner.
      */
     @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(
             summary = "Aylık dashboard özeti",
             description = "Verilen ay (YYYY-MM) için KPI'lar ve fatura durumu dağılımını döner. "

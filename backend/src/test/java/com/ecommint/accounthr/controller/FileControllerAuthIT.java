@@ -117,11 +117,14 @@ class FileControllerAuthIT extends AbstractDataCleanupIT {
                 HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
     }
 
-    /** Kimliği doğrulanmış ama yetkisiz TEAM_MEMBER → 403. */
+    /**
+     * E3-08: TEAM_MEMBER artık dosya indirebilir (matris genişletildi — ekip üyeleri
+     * yükledikleri dosyalara erişebilmeli). Eskiden 403 beklenirdi; yeni sözleşmede 200.
+     */
     @Test
-    void nonAdminAuthenticatedUserGets403OnDownload() {
+    void teamMemberCanDownload() {
         ResponseEntity<byte[]> resp = download(memberEmail);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     /** ADMIN → indirilebilir (200). */

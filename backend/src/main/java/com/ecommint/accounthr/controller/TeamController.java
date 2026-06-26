@@ -35,7 +35,7 @@ public class TeamController {
 
     /** Tüm takımları ada göre alfabetik sıralı, hafif {@link TeamOption} listesi olarak döner. */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(summary = "Takımları listele (picker)",
             description = "Ada göre sıralı [{ id, name }] listesi. Kimlik doğrulama gerektirir.")
     public List<TeamOption> list() {

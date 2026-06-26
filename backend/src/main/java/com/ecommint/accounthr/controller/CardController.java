@@ -37,7 +37,7 @@ public class CardController {
 
     /** Tüm kartları referans olarak listele (son-4-haneye göre sıralı). */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(summary = "Kartları listele (referans)",
             description = "Servisler ekranı kart seçimi için id + son4 + banka + sahip. "
                     + "Kimlik doğrulama gerektirir.")

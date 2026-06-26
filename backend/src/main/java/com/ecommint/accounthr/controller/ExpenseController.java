@@ -70,7 +70,7 @@ public class ExpenseController {
      * {@code ?q=} (hizmet/sağlayıcı). Sayfalama: {@code ?page=&size=&sort=}.
      */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(
             summary = "Aylık harcamalar listesi (12 kolon, sayfalı)",
             description = "month verilmezse içinde bulunulan ay. Filtreler yalnızca ANA "
@@ -101,7 +101,7 @@ public class ExpenseController {
      * {@code usingTeamId} → 400 VALIDATION_ERROR (hepsi {@code GlobalExceptionHandler}).
      */
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(
             summary = "Elle harcama satırı oluştur (E3-06)",
@@ -130,7 +130,7 @@ public class ExpenseController {
      * DEĞİŞTİRMEZ ({@code informational} bayrağı ayrıdır, dokunulmaz).
      */
     @PatchMapping("/{id}/status")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @Operation(
             summary = "Fatura durumunu elle değiştir (E3-07)",
             description = "Satırın temsilci (max-id) invoice'unun durumunu günceller. Geçiş "

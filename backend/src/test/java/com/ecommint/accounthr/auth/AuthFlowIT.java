@@ -132,11 +132,15 @@ class AuthFlowIT extends AbstractDataCleanupIT {
     }
 
     // 5. protected endpoint without token → 401
+    // E3-08: /me'ye eklenen null-guard + @PreAuthorize("isAuthenticated()") defense-in-depth.
+    // Canlı davranış filter-chain entry point üzerinden 401 kalır (null-guard'a hiç ulaşılmaz);
+    // burada NESNEL olarak 500 OLMADIĞINI da doğruluyoruz (NPE'ye düşmediğinin kanıtı).
     @Test
     @SuppressWarnings("rawtypes")
     void protectedEndpointWithoutTokenReturns401() {
         ResponseEntity<Map> resp = rest.getForEntity("/api/v1/auth/me", Map.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getStatusCode()).isNotEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(resp.getBody().get("error")).isEqualTo("UNAUTHORIZED");
     }
 

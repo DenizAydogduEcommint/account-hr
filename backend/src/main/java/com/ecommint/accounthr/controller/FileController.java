@@ -126,11 +126,11 @@ public class FileController {
     /**
      * Bir invoice'a bağlı dosyaların metadata listesi.
      *
-     * <p>Geçici yetki kapısı: fatura PDF'leri hassas olduğundan bu okuma/taşıma uçları
-     * yalnızca ADMIN/ACCOUNTING rollerine açıktır. Tam per-invoice (nesne-düzeyi sahiplik)
-     * yetkilendirmesi E3-08'e ertelenmiştir.
+     * <p>E3-08: okuma uçları (list/download) ADMIN/ACCOUNTING/TEAM_MEMBER üç role de açıktır;
+     * ekip üyeleri yükledikleri fatura dosyalarını görebilmeli. Yazma/taşıma uçları (generic
+     * POST /files, trash, waiting) yalnızca ADMIN/ACCOUNTING'de kalır.
      */
-    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @GetMapping
     public List<FileResponse> list(@RequestParam("invoiceId") Long invoiceId) {
         return fileAssetRepository.findByInvoiceId(invoiceId).stream()
@@ -141,10 +141,10 @@ public class FileController {
     /**
      * Dosya indir (akış).
      *
-     * <p>Geçici yetki kapısı: yalnızca ADMIN/ACCOUNTING (fatura PDF'leri hassas). Tam
-     * per-invoice (nesne-düzeyi sahiplik) yetkilendirmesi E3-08'e ertelenmiştir.
+     * <p>E3-08: indirme ADMIN/ACCOUNTING/TEAM_MEMBER üç role de açıktır (ekip üyeleri
+     * yükledikleri dosyalara erişebilmeli). Taşıma/yazma uçları ADMIN/ACCOUNTING'de kalır.
      */
-    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable("id") Long id) {
         FileAsset asset = fileAssetRepository.findById(id)

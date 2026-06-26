@@ -61,7 +61,7 @@ public class InvoiceController {
      * @param files       1..N dosya (PDF/XML/JPG/PNG, her biri ≤ 10MB)
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(
             summary = "Fatura yükle (servis + ay + dosyalar)",
             description = "Multipart form-data ile servis + ay seçilip dosya(lar) yüklenir. "

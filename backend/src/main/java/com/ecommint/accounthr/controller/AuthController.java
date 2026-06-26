@@ -53,7 +53,11 @@ public class AuthController {
 
     /** GET /api/v1/auth/me → 200 mevcut kullanıcı; token yoksa/geçersizse → 401. */
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public UserResponse me(Authentication authentication) {
+        if (authentication == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Not authenticated");
+        }
         return authService.me(authentication.getName());
     }
 

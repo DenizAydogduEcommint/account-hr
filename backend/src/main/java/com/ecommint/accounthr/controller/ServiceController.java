@@ -61,7 +61,7 @@ public class ServiceController {
      * sayfalama: {@code ?page=&size=&sort=name,asc}.
      */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
     @Operation(
             summary = "Servisleri listele (sayfalı, filtre + arama)",
             description = "Opsiyonel: ?active=YES|NO|UNCERTAIN, ?frequency=MONTHLY|YEARLY|USAGE_BASED|AD_HOC, "

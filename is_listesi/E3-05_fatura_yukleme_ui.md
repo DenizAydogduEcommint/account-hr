@@ -16,14 +16,14 @@ Ekip üyeleri eksik faturaları kendileri yükleyebilsin: servis ve ay seçer, t
 Eksik fatura ekranındaki (E3-04) "Fatura Yükle" butonu veya harcama satırından açılan bir form/modal. Kullanıcı servis ve ayı seçer (eksik ekranından gelindiyse önceden dolu gelir), tutar + para birimi + kısa açıklama girer, bir veya birden çok dosya yükler (PDF/XML/JPG). Dosya(lar) dosya sistemine kaydedilir (E1-04), metadata DB'ye yazılır, ilgili harcama satırının Fatura Durumu "Bulundu" (veya e-Fatura) olur, Fatura Notu dosya bilgisini içerir. Bir satıra birden çok dosya eklenebilir (fatura + statement + XML).
 
 ## Kabul Kriterleri (DOD)
-- [ ] Servis + ay seçimi ile yükleme formu açılır; eksik ekranından gelince ön-doldurulur
-- [ ] Tutar, para birimi, açıklama alanları girilebilir
-- [ ] Tek seferde birden çok dosya yüklenebilir (drag-drop + dosya seç)
-- [ ] İzinli dosya tipleri (PDF, XML, JPG, PNG) ve boyut limiti doğrulanır
-- [ ] Yükleme sonrası ilgili satırın durumu "Bulundu" (veya seçildiyse "e-Fatura") olur
-- [ ] Fatura Notu / metadata dosya bilgisini içerir
-- [ ] Yükleme başarısızsa anlaşılır hata gösterilir, dosya yarım kaydedilmez
-- [ ] Eksik fatura sayacı (E3-04/E3-01) yükleme sonrası azalır
+- [x] Servis + ay seçimi ile yükleme formu/modalı; Eksik Fatura ekranından ön-doldurulur
+- [x] Tutar, para birimi, açıklama alanları
+- [x] Çoklu dosya (drag-drop + dosya seç)
+- [x] İzinli tipler (PDF/XML/JPG/PNG) + boyut limiti (≤10MB) hem client hem server doğrulama
+- [x] Yükleme sonrası durum "Bulundu" (eInvoice seçilirse "e-Fatura")
+- [x] Fatura Notu dosya bilgisini içerir (mevcut not korunur — append)
+- [x] Yükleme başarısızsa anlaşılır hata; **atomik** (transaction-synchronization ile commit-sonrası orphan temizliği)
+- [x] Eksik fatura sayacı yükleme sonrası azalır (tarayıcı + endpoint: HepsiBurada upload → eksik 2→1)
 
 ## Alt Görevler
 - [ ] Backend: `POST /api/invoices` (multipart) — dosya kaydı + metadata + satır durum güncelleme
@@ -40,5 +40,15 @@ Eksik fatura ekranındaki (E3-04) "Fatura Yükle" butonu veya harcama satırınd
 - Yükleme atomik olmalı: dosya + metadata + durum tek transaction mantığında
 
 ## Açık Sorular / Riskler
-- Tutar/para birimi otomatik fatura PDF'inden okunsun mu? (MVP'de manuel giriş, OCR/parse sonraki epic)
-- e-Fatura ile normal fatura ayrımını kullanıcı mı seçer yoksa sistem mi belirler? — Öneri: kullanıcı işaretler
+- ~~Tutar/para birimi PDF'ten okunsun mu?~~ → MVP'de manuel giriş (OCR sonraki epic).
+- ~~e-Fatura ayrımı?~~ → Kullanıcı işaretler (eInvoice checkbox → E_INVOICE, yoksa FOUND).
+
+## Tamamlanma Kaydı
+- Durum: ✅ Tamamlandı — 2026-06-26 · **MVP'NİN İKİNCİ ÇEKİRDEĞİ (yükleme)**
+- YouTrack: IK-242 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend) + account-hr-frontend
+- **Backend:** `POST /api/v1/invoices` (multipart, InvoiceUploadService). Find-or-create expense/invoice (mevcut EXPECTED'i FOUND'a çeker veya yeni oluşturur), durum FOUND/E_INVOICE, E1-04 storage (`{slug}_{ay}.{ext}`, sha256 dedup), FileAsset. **Atomik**: transaction-synchronization ile commit-sonrası başarısızlıkta yazılan dosyalar temizlenir (orphan yok); batch-içi sha256 dedup; mevcut not korunur (append).
+- **Frontend:** ortak upload modalı (dropzone + çoklu dosya + sürükle-bırak + eInvoice + client validation), Eksik Fatura "Fatura Yükle" butonundan ön-dolu açılır, başarıda eksik listesi/sayaç yenilenir.
+- **Gerçek doğrulama (lokal PG14 + tarayıcı):** HepsiBurada Mart'a test PDF upload → invoice 26 EXPECTED→**FOUND**, FileAsset bağlı, **eksik 2→1** (dashboard missingCount=1 birebir), dosya storage root'a `hepsiburada_magaza_mart.pdf` indi, **kaynak expenses/faturalar 59 sabit (dokunulmadı)**. Geri alma ile DB temiz duruma döndürüldü.
+- Test: backend `./mvnw test` 174/174 (3 surefire sırasında; +13 toplam — upload IT'leri + rollback IT); frontend `ng build` temiz.
+- **İki bağımsız review turu (agent + parent):** parent turu 3 atomicity/data-loss bulgusu: (1) post-commit file orphan → transaction-synchronization afterCompletion temizliği; (2) mevcut invoice not'unun ezilmesi → mergeNote (koru/append); (3) batch-içi sha256 duplicate → orphan → batch-içi dedup. Hepsi düzeltildi + test edildi (InvoiceUploadRollbackIT).

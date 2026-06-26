@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-25
-**Özet:** 16 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E3 ilerliyor — MVP çekirdeği (eksik fatura) çalışıyor** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Özet:** 17 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E3 ilerliyor — MVP çekirdeği çalışıyor (eksik fatura tespit + fatura yükleme)** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 
@@ -41,7 +41,7 @@
 | E3-02 | Servisler ekranı | ✅ | IK-239. Service CRUD + tablo/modal/filtre/arama, badge'ler. PG14: 32 servis, no-delete. + Higgsfield logo/login-bg + CSS değişken alias fix (görsel sistem) |
 | E3-03 | Aylık harcamalar ekranı | ✅ | IK-240. 12 kolonlu tablo + filtreler + bilgi-amaçlı ayrı bölüm. PG14: Şubat 28+23 satır (E2-05 ile birebir). + login göz butonu + varsayılan ay fix. N+1 borç |
 | E3-04 | Eksik fatura ekranı | ✅ | IK-241. **MVP ÇEKİRDEĞİ.** Servis↔ay çapraz doğrulama. PG14: Mart 2 eksik (HepsiBurada, Zoom), dashboard birebir. Bağımsız review temiz |
-| E3-05 | Fatura yükleme UI | ⬜ | MVP çekirdeği |
+| E3-05 | Fatura yükleme UI | ✅ | IK-242. **MVP çekirdeği (yükleme).** POST /invoices (atomik, storage). PG14: HepsiBurada upload → FOUND, eksik 2→1, kaynak dokunulmadı. 3 atomicity bulgusu düzeltildi |
 | E3-06 | Manuel harcama girişi | ⬜ | |
 | E3-07 | Fatura durum state machine | ⬜ | |
 | E3-08 | Rol bazlı görünümler | ⬜ | |

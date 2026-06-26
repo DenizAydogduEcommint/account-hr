@@ -223,11 +223,14 @@ public class InvoiceUploadService {
         List<String> writtenPaths = registerCleanupSynchronization();
 
         List<InvoiceUploadResponse.StoredFileSummary> summaries = new ArrayList<>();
-        // FIX 3: Tek istekte aynı SHA-256'ya sahip dosyalar — ikincisi DB findBySha256'yı
-        // (ilki henüz flush edilmediğinden) geçer, diske yazılır ve V9 unique index commit'te
-        // patlar (409 + orphan). Çözüm: batch İÇİNDE, dosyayı YAZMADAN ÖNCE SHA-256 ile dedup
-        // et; aynı içerikli ikinci dosya için ne fiziksel dosya ne ikinci FileAsset oluştur —
-        // zaten depolanmış FileAsset'in özetini tekrar kullan (orphan/409 yok).
+        // FIX 3: Tek istekte aynı SHA-256'ya sahip dosyalar — ikincisi DB kontrolünü (ilki henüz
+        // flush edilmediğinden) geçer, diske yazılır ve tekil index commit'te patlar (409 +
+        // orphan). Çözüm: batch İÇİNDE, dosyayı YAZMADAN ÖNCE SHA-256 ile dedup et; aynı içerikli
+        // ikinci dosya için ne fiziksel dosya ne ikinci FileAsset oluştur — zaten depolanmış
+        // FileAsset'in özetini tekrar kullan (orphan/409 yok).
+        // NOT (E2-DR-1): Bir upload TEK faturayadır → bu batch-dedup zaten (fatura, sha) tanecikli
+        // doğru çalışır. store() artık içerik-duplicate'i FATURA başına reddediyor; aynı içerik
+        // FARKLI faturaya (başka bir upload isteğinde) serbestçe yüklenebilir.
         Set<String> seenSha = new HashSet<>();
         Map<String, InvoiceUploadResponse.StoredFileSummary> summaryBySha = new HashMap<>();
         try {

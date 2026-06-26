@@ -151,10 +151,11 @@ public class InvoiceFileImportService {
         int newFileRows = 0;
         List<String> unmatchedFiles = new ArrayList<>();
         Set<String> shaSeenThisRun = new HashSet<>();
-        // Bu run'da her sha içeriğinin İLK bağlandığı invoice id'si (null = eşleşmedi/trash).
-        // Aynı içerik bu run'da farklı bir faturaya eşleşirse (çapraz-fatura çakışması) ikincisi
-        // sessizce atlanmaz, raporlanır.
-        Map<String, Long> shaBoundInvoiceThisRun = new HashMap<>();
+        // Bu run'da bir sha içeriğine bağlanan invoice id'leri (null = eşleşmedi/trash).
+        // E2-DR-1: aynı içerik bu run'da FARKLI bir faturaya eşleşirse o faturaya AYRI bir
+        // FileAsset satırıyla bağlanır (sessiz düşürme/unmatched değil); yalnızca AYNI
+        // (fatura, sha) ikilisi gerçek-duplicate sayılır ve atlanır.
+        Map<String, Set<Long>> shaBoundInvoicesThisRun = new HashMap<>();
 
         List<Path> files = collectFiles(source);
         for (Path file : files) {
@@ -172,6 +173,7 @@ public class InvoiceFileImportService {
 
             boolean alreadyInDb = fileAssetRepository.existsBySha256(sha256);
             boolean sameRunDuplicate = shaSeenThisRun.contains(sha256);
+            boolean physicallyPresent = alreadyInDb || sameRunDuplicate; // fizik dosya zaten yazıldı
 
             // --- Duplicate tespiti (raporlama amaçlı) ---
             boolean isDuplicate = fileName.toLowerCase(Locale.ROOT).contains("duplicate")
@@ -181,52 +183,49 @@ public class InvoiceFileImportService {
                 duplicates++;
             }
 
-            // --- İçerik-dedup: aynı SHA-256 zaten kalıcıysa (DB'de ya da bu run'da)
-            //     YENİ satır YAZMA, KOPYALAMA, sayma. Böylece her içerik için tam olarak
-            //     bir fizik kopya + bir DB satırı kalır; orphan oluşmaz. ---
-            // Re-run'da bu yol her dosya için çalışır → copied/matched/... hepsi 0,
-            // newFileRows 0. Böylece "2. çalıştırma 0 yeni dosya" kanıtlanır.
-            if (alreadyInDb) {
-                // FIX (sessiz düşürme): V9 kısmi-tekil index ikinci bir FileAsset satırına
-                // izin vermez (tam junction kapsam dışı — çok-faturalı paylaşım ERTELENDİ).
-                // Ama bu dosya FARKLI bir faturaya eşleşiyorsa içerik-aynı dosyayı sessizce
-                // atlamak, o farklı faturayı dosyasız/görünmez bırakır. Bu yüzden çapraz-fatura
-                // çakışmasını RAPORLA (unmatched + uyarı); aynı faturaya re-import ise (idempotent
-                // re-run) sessiz kalır.
-                Invoice thisMatch = isUnderTrash(relPath)
-                        ? null
-                        : findMatch(relPath, noteIndex, baseIndex);
-                Long thisInvoiceId = thisMatch != null ? thisMatch.getId() : null;
-                boolean crossInvoiceCollision = false;
-                for (FileAsset owner : fileAssetRepository.findBySha256(sha256)) {
-                    Long ownerInvoiceId = owner.getInvoice() != null
-                            ? owner.getInvoice().getId() : null;
-                    if (!java.util.Objects.equals(ownerInvoiceId, thisInvoiceId)) {
-                        crossInvoiceCollision = true;
-                        break;
-                    }
+            // --- Eşleme (her durumda lazım: bağlanacak fatura belirlenir) ---
+            boolean inTrash = isUnderTrash(relPath);
+            Invoice match = inTrash ? null : findMatch(relPath, noteIndex, baseIndex);
+            Long thisInvoiceId = invoiceIdOf(match);
+
+            if (physicallyPresent) {
+                // E2-DR-1: Bu içeriğin fizik kopyası zaten storage'da var. İki olasılık:
+                //   (a) Gerçek-duplicate — AYNI (fatura, sha) zaten kayıtlı → atla (yeni satır YOK).
+                //       Re-run'da her dosya buraya düşer → 0 yeni satır, 0 kopya (idempotent).
+                //   (b) Çapraz-fatura paylaşımı — aynı içerik FARKLI bir faturaya eşleşiyor →
+                //       o faturaya AYRI bir FileAsset satırı oluştur, mevcut fizik path'i YENİDEN
+                //       KULLAN (bytes tekrar kopyalanmaz; dosya bir kez saklanır).
+                if (sameInvoiceShaExists(sha256, thisInvoiceId, shaBoundInvoicesThisRun)) {
+                    continue; // (a) gerçek-duplicate → atla
                 }
-                if (crossInvoiceCollision) {
-                    unmatched++;
-                    unmatchedFiles.add(relPath + " — içerik-aynı, başka faturaya bağlı; manuel inceleme");
-                    log.warn("İçerik-aynı dosya farklı faturaya eşleşiyor ama mevcut FileAsset "
-                            + "başka faturaya bağlı (V9 tekil index ikinci satıra izin vermez) → "
-                            + "unmatched olarak raporlandı: {}", relPath);
+                // (b) Farklı faturaya bağla: mevcut bir FileAsset'in fizik metadatasını yeniden kullan.
+                FileAsset source0 = existingAssetForSha(sha256);
+                if (source0 == null) {
+                    // Savunma: physicallyPresent ama referans satır bulunamadı (beklenmez).
+                    log.warn("İçerik fizik olarak mevcut sayıldı ama referans FileAsset yok: {}", relPath);
+                    continue;
                 }
-                continue;
-            }
-            if (sameRunDuplicate) {
-                // Aynı run'da ikinci kez görülen içerik. FARKLI faturaya eşleşiyorsa
-                // (çapraz-fatura çakışması) sessizce atlama → raporla.
-                Long thisInvoiceId = isUnderTrash(relPath)
-                        ? null
-                        : invoiceIdOf(findMatch(relPath, noteIndex, baseIndex));
-                Long boundInvoiceId = shaBoundInvoiceThisRun.get(sha256);
-                if (!java.util.Objects.equals(boundInvoiceId, thisInvoiceId)) {
+                FileAsset attach = new FileAsset();
+                attach.setInvoice(match);
+                attach.setFilePath(source0.getFilePath());
+                attach.setFileName(source0.getFileName());
+                attach.setFileType(source0.getFileType());
+                attach.setMimeType(source0.getMimeType());
+                attach.setSizeBytes(source0.getSizeBytes());
+                attach.setSha256(sha256);
+                fileAssetRepository.save(attach);
+                newFileRows++; // gerçek yeni satır (ama fizik kopya YOK → copied artmaz)
+                rememberShaInvoice(shaBoundInvoicesThisRun, sha256, thisInvoiceId);
+
+                if (inTrash) {
+                    trashed++;
                     unmatched++;
-                    unmatchedFiles.add(relPath + " — içerik-aynı, başka faturaya bağlı; manuel inceleme");
-                    log.warn("İçerik-aynı dosya bu run'da farklı faturaya eşleşiyor (V9 tekil index "
-                            + "ikinci satıra izin vermez) → unmatched olarak raporlandı: {}", relPath);
+                    unmatchedFiles.add(relPath);
+                } else if (match != null) {
+                    matched++; // E2-DR-1: içerik-paylaşımlı dosya artık BAĞLANDI
+                } else {
+                    unmatched++;
+                    unmatchedFiles.add(relPath);
                 }
                 continue;
             }
@@ -235,11 +234,7 @@ public class InvoiceFileImportService {
             // --- Yeni içerik → şimdi (ve yalnızca şimdi) fiziken kopyala ---
             StoredFile stored = copyToStorage(file, relPath);
             copied++; // DB'de yoktu → fiilen (ilk kez) kopyalandı
-
-            // --- Eşleme ---
-            boolean inTrash = isUnderTrash(relPath);
-            Invoice match = inTrash ? null : findMatch(relPath, noteIndex, baseIndex);
-            shaBoundInvoiceThisRun.put(sha256, invoiceIdOf(match));
+            rememberShaInvoice(shaBoundInvoicesThisRun, sha256, thisInvoiceId);
 
             FileAsset asset = new FileAsset();
             asset.setInvoice(match);
@@ -375,6 +370,48 @@ public class InvoiceFileImportService {
 
     private static Long invoiceIdOf(Invoice invoice) {
         return invoice != null ? invoice.getId() : null;
+    }
+
+    /**
+     * E2-DR-1: AYNI (fatura, sha) ikilisi zaten var mı? (gerçek-duplicate kontrolü)
+     * Dolu invoiceId için DB bileşik tekiliyle aynı tanecik: {@code existsByInvoiceIdAndSha256}.
+     * {@code invoiceId == null} (eşleşmemiş/trash) için Spring Data {@code invoice_id = null}
+     * üretir ve hiçbir satırla eşleşmez; bu yüzden null-invoice content-dedup açıkça ele alınır:
+     * mevcut bir FileAsset (DB) ya da bu run'da bağlanmış bir null-invoice sahibi varsa
+     * gerçek-duplicate sayılır (ikinci null-invoice satırı oluşturulmaz).
+     */
+    private boolean sameInvoiceShaExists(String sha256, Long invoiceId,
+                                         Map<String, Set<Long>> shaBoundInvoicesThisRun) {
+        if (invoiceId != null) {
+            if (fileAssetRepository.existsByInvoiceIdAndSha256(invoiceId, sha256)) {
+                return true;
+            }
+            Set<Long> bound = shaBoundInvoicesThisRun.get(sha256);
+            return bound != null && bound.contains(invoiceId);
+        }
+        // null-invoice: bu sha için null sahipli bir satır zaten var mı?
+        for (FileAsset owner : fileAssetRepository.findBySha256(sha256)) {
+            if (owner.getInvoice() == null) {
+                return true;
+            }
+        }
+        Set<Long> bound = shaBoundInvoicesThisRun.get(sha256);
+        return bound != null && bound.contains(null);
+    }
+
+    /**
+     * E2-DR-1: Bu sha içeriğine sahip mevcut bir FileAsset (fizik metadata kaynağı) bulur.
+     * Çapraz-fatura paylaşımında yeni satır, var olan satırın fizik path'ini/adını yeniden
+     * kullanır (bytes tekrar kopyalanmaz). Önce DB'ye bakar (re-run/önceki run); yoksa bu run'da
+     * yazılmış bir satır vardır → DB flush'lanmış olacağından genelde DB yeterlidir.
+     */
+    private FileAsset existingAssetForSha(String sha256) {
+        List<FileAsset> existing = fileAssetRepository.findBySha256(sha256);
+        return existing.isEmpty() ? null : existing.get(0);
+    }
+
+    private static void rememberShaInvoice(Map<String, Set<Long>> map, String sha256, Long invoiceId) {
+        map.computeIfAbsent(sha256, k -> new HashSet<>()).add(invoiceId);
     }
 
     // ------------------------------------------------------------------------

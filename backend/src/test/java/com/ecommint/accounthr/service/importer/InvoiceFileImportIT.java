@@ -272,13 +272,13 @@ class InvoiceFileImportIT extends AbstractDataCleanupIT {
     }
 
     /**
-     * FIX 2: AYNI içerikli iki dosya FARKLI iki faturaya eşleşiyorsa, ikincisi SESSİZCE
-     * atlanmamalı. V9 kısmi-tekil index ikinci FileAsset satırına izin vermediğinden tam
-     * junction kapsam dışıdır; ama ikinci dosya "içerik-aynı, başka faturaya bağlı" notuyla
-     * unmatched RAPORLANMALI (görünmez kalmamalı).
+     * E2-DR-1: AYNI içerikli iki dosya FARKLI iki faturaya eşleşiyorsa, artık HER İKİSİ de
+     * kendi {@link FileAsset} satırına BAĞLANIR (eskiden ikincisi "içerik-aynı, başka faturaya
+     * bağlı" diye unmatched raporlanıyordu). Fizik dosya yine BİR KEZ saklanır: ikinci satır
+     * birincinin {@code filePath}'ini paylaşır (bytes tekrar kopyalanmaz).
      */
     @Test
-    void identicalContentMatchingTwoDifferentInvoices_secondIsReported() throws IOException {
+    void identicalContentMatchingTwoDifferentInvoices_bothAttached() throws IOException {
         deleteRecursively(sourceDir.resolve("2026-03"));
         deleteRecursively(sourceDir.resolve("trash"));
         invoiceRepository.deleteAll();
@@ -295,19 +295,60 @@ class InvoiceFileImportIT extends AbstractDataCleanupIT {
 
         InvoiceFileImportSummary summary = importService.scanAndImport(sourceDir);
 
-        // İlk dosya (sorted: svc_a < svc_b) kopyalandı + invA'ya bağlandı.
+        // İlk dosya (sorted: svc_a < svc_b) fiziken kopyalandı; ikincisi mevcut path'i paylaştı.
+        assertThat(summary.copied()).isEqualTo(1);          // tek fizik kopya
+        assertThat(summary.newFileRows()).isEqualTo(2);     // iki DB satırı
+        assertThat(summary.matched()).isEqualTo(2);         // iki faturaya da bağlandı
+        assertThat(summary.unmatched()).isZero();
+        // svc_b içeriği svc_a ile aynı → duplicate sayılır (raporlama amaçlı).
+        assertThat(summary.duplicates()).isEqualTo(1);
+
+        // HER İKİ fatura da kendi FileAsset satırına sahip.
+        List<FileAsset> aFiles = fileAssetRepository.findByInvoiceId(invA.getId());
+        List<FileAsset> bFiles = fileAssetRepository.findByInvoiceId(invB.getId());
+        assertThat(aFiles).hasSize(1);
+        assertThat(bFiles).hasSize(1);
+
+        // Fizik dosya BİR KEZ saklandı: yalnızca svc_a.pdf diskte; svc_b.pdf YOK.
+        assertThat(Files.exists(storageRoot.resolve("2026-03/svc_a.pdf"))).isTrue();
+        assertThat(Files.exists(storageRoot.resolve("2026-03/svc_b.pdf"))).isFalse();
+        // İki satır AYNI fizik path'i paylaşır.
+        assertThat(bFiles.get(0).getFilePath()).isEqualTo(aFiles.get(0).getFilePath());
+
+        // İki DB satırı, tek fizik dosya (orphan yok, paylaşımlı).
+        assertThat(fileAssetRepository.count()).isEqualTo(2);
+        assertThat(countPhysicalFiles(storageRoot)).isEqualTo(1L);
+    }
+
+    /**
+     * E2-DR-1 (fatura-içi dedup): AYNI faturaya eşleşen iki byte-aynı dosya → yalnızca BİR
+     * {@link FileAsset} satırı (bileşik tekil / fatura-içi dedup). İkinci dosya gerçek-duplicate
+     * sayılır; kullanıcıya hata YANSImaz (mevcut dedup davranışı korunur).
+     */
+    @Test
+    void sameInvoiceSameContentTwice_onlyOneFileAsset() throws IOException {
+        deleteRecursively(sourceDir.resolve("2026-03"));
+        deleteRecursively(sourceDir.resolve("trash"));
+        invoiceRepository.deleteAll();
+
+        // Tek fatura; note tam tabana (aws_mart) işaret eder → kardeş (_statement) da AYNI faturaya.
+        Invoice inv = seedInvoiceWithNote("SoloService", "faturalar/2026-03/aws_mart.pdf");
+
+        Path month = Files.createDirectories(sourceDir.resolve("2026-03"));
+        String identical = "same-content-same-invoice";
+        // İki dosya AYNI içerik, AYNI klasör+taban (aws_mart) → ikisi de inv'e eşleşir.
+        write(month.resolve("aws_mart.pdf"), identical);
+        write(month.resolve("aws_mart_statement.pdf"), identical);
+
+        InvoiceFileImportSummary summary = importService.scanAndImport(sourceDir);
+
+        // Tek fizik kopya, tek DB satırı: ikinci (aynı fatura+sha) gerçek-duplicate → atlandı.
         assertThat(summary.copied()).isEqualTo(1);
         assertThat(summary.newFileRows()).isEqualTo(1);
-        assertThat(summary.matched()).isEqualTo(1);
-        assertThat(fileAssetRepository.findByInvoiceId(invA.getId())).hasSize(1);
-        // invB DOSYASIZ kaldı (V9 ikinci satıra izin vermez) AMA sessiz değil:
-        assertThat(fileAssetRepository.findByInvoiceId(invB.getId())).isEmpty();
         assertThat(summary.duplicates()).isEqualTo(1);
-        assertThat(summary.unmatched()).isEqualTo(1);
-        assertThat(summary.unmatchedFiles())
-                .anySatisfy(s -> assertThat(s)
-                        .contains("2026-03/svc_b.pdf")
-                        .contains("içerik-aynı"));
+        assertThat(fileAssetRepository.findByInvoiceId(inv.getId())).hasSize(1);
+        assertThat(fileAssetRepository.count()).isEqualTo(1);
+        assertThat(countPhysicalFiles(storageRoot)).isEqualTo(1L);
     }
 
     /**

@@ -11,21 +11,29 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
+
 import com.ecommint.accounthr.config.JpaAuditingConfig;
 import com.ecommint.accounthr.domain.enums.ActiveState;
+import com.ecommint.accounthr.domain.enums.Currency;
 import com.ecommint.accounthr.domain.enums.FileType;
 import com.ecommint.accounthr.domain.enums.Frequency;
+import com.ecommint.accounthr.domain.enums.InvoiceStatus;
+import com.ecommint.accounthr.repository.ExpenseRepository;
 import com.ecommint.accounthr.repository.FileAssetRepository;
+import com.ecommint.accounthr.repository.InvoiceRepository;
+import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ProviderRepository;
 import com.ecommint.accounthr.repository.ServiceRepository;
 
 import jakarta.persistence.EntityManager;
 
 /**
- * E1-DR-1/DR-2/DR-5 teknik-borç kapanışının DB-düzeyi (H2, ddl-auto=create-drop)
+ * E1-DR-1/DR-2/DR-5 + E2-DR-1 teknik-borç kapanışının DB-düzeyi (H2, ddl-auto=create-drop)
  * doğrulaması. Flyway testlerde kapalı olduğundan şema entity'lerden üretilir; bu
- * yüzden @Version kolonları, services tekil kısıtı ve files.sha256 tekil kısıtı
- * burada test şemasında da etkindir.
+ * yüzden @Version kolonları, services tekil kısıtı ve files {@code (invoice_id, sha256)}
+ * bileşik tekil kısıtı (E2-DR-1; eski global {@code uq_files_sha256} yerine) burada test
+ * şemasında da etkindir.
  */
 @DataJpaTest
 @Import(JpaAuditingConfig.class)
@@ -35,6 +43,9 @@ class OptimisticLockingAndUniquenessJpaTest {
     @Autowired private ProviderRepository providerRepository;
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private FileAssetRepository fileAssetRepository;
+    @Autowired private PeriodRepository periodRepository;
+    @Autowired private ExpenseRepository expenseRepository;
+    @Autowired private InvoiceRepository invoiceRepository;
     @Autowired private EntityManager entityManager;
 
     // --- E1-DR-1: optimistic locking ---------------------------------------
@@ -115,25 +126,41 @@ class OptimisticLockingAndUniquenessJpaTest {
         assertThat(serviceRepository.count()).isEqualTo(2);
     }
 
-    // --- E1-DR-5: files.sha256 partial-unique in test (H2) schema ----------
+    // --- E2-DR-1: files (invoice_id, sha256) composite-unique in test (H2) schema ----
 
     @Test
-    void duplicateNonNullSha256_violatesUniqueConstraint() {
+    void sameInvoiceDuplicateSha256_violatesUniqueConstraint() {
+        // E2-DR-1: tekillik artık FATURA başına. AYNI faturaya aynı içerik (sha) iki kez → ihlal.
         String sha = "a".repeat(64);
+        Invoice invoice = newInvoice("DupInvoice");
 
-        FileAsset first = newFile("dup1.pdf", sha);
+        FileAsset first = newFile("dup1.pdf", sha, invoice);
         fileAssetRepository.saveAndFlush(first);
 
-        FileAsset second = newFile("dup2.pdf", sha);
+        FileAsset second = newFile("dup2.pdf", sha, invoice);
 
         assertThatThrownBy(() -> fileAssetRepository.saveAndFlush(second))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
+    void sameSha256DifferentInvoices_isAllowed() {
+        // E2-DR-1 kazanımı: byte-aynı içerik İKİ FARKLI faturaya birer satırla bağlanabilir.
+        String sha = "b".repeat(64);
+        Invoice invA = newInvoice("ShareInvoiceA");
+        Invoice invB = newInvoice("ShareInvoiceB");
+
+        fileAssetRepository.saveAndFlush(newFile("shared-a.pdf", sha, invA));
+        // Aynı sha, FARKLI fatura → bileşik tekil ÇAKMAZ.
+        fileAssetRepository.saveAndFlush(newFile("shared-b.pdf", sha, invB));
+
+        assertThat(fileAssetRepository.count()).isEqualTo(2);
+    }
+
+    @Test
     void multipleNullSha256_areAllowed() {
-        FileAsset a = newFile("null-a.pdf", null);
-        FileAsset b = newFile("null-b.pdf", null);
+        FileAsset a = newFile("null-a.pdf", null, null);
+        FileAsset b = newFile("null-b.pdf", null, null);
 
         fileAssetRepository.saveAndFlush(a);
         // Both null sha256 → must NOT conflict (partial-unique / NULL-not-equal semantics).
@@ -153,8 +180,42 @@ class OptimisticLockingAndUniquenessJpaTest {
         return s;
     }
 
-    private static FileAsset newFile(String fileName, String sha256) {
+    /** Distinct period üretmek için sayaç ((period_year, period_month) tekil + code tekil). */
+    private int periodSeq = 0;
+
+    /** Minimal persisted Invoice (Provider→Service→Period→Expense→Invoice zinciri). */
+    private Invoice newInvoice(String key) {
+        Provider provider = new Provider();
+        provider.setName(key + " Provider");
+        provider = providerRepository.save(provider);
+
+        Service service = newService(key + " Service", provider);
+        service = serviceRepository.save(service);
+
+        int seq = ++periodSeq; // her invoice'a benzersiz (year, month) + code ver
+        Period period = new Period();
+        period.setYear(2000 + seq);
+        period.setMonth(1);
+        period.setCode("period-" + seq);
+        period = periodRepository.save(period);
+
+        Expense expense = new Expense();
+        expense.setService(service);
+        expense.setPeriod(period);
+        expense.setCurrency(Currency.USD);
+        expense.setAmount(new BigDecimal("100.00"));
+        expense = expenseRepository.save(expense);
+
+        Invoice invoice = new Invoice();
+        invoice.setExpense(expense);
+        invoice.setProvider(provider);
+        invoice.setStatus(InvoiceStatus.EXPECTED);
+        return invoiceRepository.save(invoice);
+    }
+
+    private static FileAsset newFile(String fileName, String sha256, Invoice invoice) {
         FileAsset f = new FileAsset();
+        f.setInvoice(invoice);
         f.setFilePath("faturalar/2026-01/" + fileName);
         f.setFileName(fileName);
         f.setFileType(FileType.PDF);

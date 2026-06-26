@@ -19,6 +19,15 @@ public interface FileAssetRepository extends JpaRepository<FileAsset, Long> {
     boolean existsBySha256(String sha256);
 
     /**
+     * True-duplicate kontrolü (E2-DR-1): aynı (fatura, içerik) ikilisi zaten var mı?
+     * Bileşik tekil ({@code uq_files_invoice_sha256}) ile aynı tanecik — fatura-içi
+     * duplicate'i (aynı faturaya aynı sha) tespit eder. NOT: {@code invoiceId == null}
+     * çağrısı {@code invoice_id = null} üretir ve hiçbir satırla eşleşmez (her zaman false);
+     * null-invoice content-dedup uygulama düzeyinde {@link #findBySha256} ile ele alınır.
+     */
+    boolean existsByInvoiceIdAndSha256(Long invoiceId, String sha256);
+
+    /**
      * Duplicate tespiti (mantıksal): aynı (provider, invoice_no) ikilisine bağlı
      * mevcut dosyalar. invoice → provider ve invoice_no üzerinden gider.
      */

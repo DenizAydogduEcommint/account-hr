@@ -141,8 +141,11 @@ public class FileSystemStorageService implements StorageService {
             throw new StorageIOException("Dosya yazılamadı: " + targetDir, e);
         }
 
-        // --- İçerik bazlı duplicate: aynı SHA-256 zaten varsa ---
-        if (!fileAssetRepository.findBySha256(sha256).isEmpty()) {
+        // --- İçerik bazlı duplicate (E2-DR-1): FATURA başına. AYNI faturada aynı SHA-256
+        //     zaten varsa reddet; FARKLI faturaya aynı içerik artık serbest (byte-aynı dosya
+        //     iki meşru faturaya ait olabilir; fizik dosya yine de paylaşılarak bir kez saklanır,
+        //     ikinci satır importer üzerinden aynı path'i referanslar). ---
+        if (invoiceId != null && fileAssetRepository.existsByInvoiceIdAndSha256(invoiceId, sha256)) {
             deleteQuietly(tempFile);
             throw new DuplicateFileException("Aynı içeriğe (SHA-256=" + sha256 + ") sahip dosya zaten mevcut.");
         }

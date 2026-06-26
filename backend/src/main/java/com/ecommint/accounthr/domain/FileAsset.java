@@ -26,13 +26,18 @@ import jakarta.persistence.Version;
  * Fatura dosyası metadata + path. invoice → files 1:N (pdf/xml/statement).
  * Tablo adı `files`. Sadece createdAt taşır (updatedAt yok) — bu yüzden BaseEntity'den türemez.
  *
- * <p>{@code uq_files_sha256} (E1-DR-5): sha256 üzerinde tablo düzeyi tekil kısıt — Postgres'te
- * V9 KISMİ tekil index ({@code WHERE sha256 IS NOT NULL}) ile, H2/çoğu DB'de ise birden çok
- * NULL'ı çakışma SAYMAMA davranışıyla aynı niyeti taşır; böylece test (H2, ddl-auto=create-drop)
- * şeması da eşzamanlı-dedup yarışını DB düzeyinde kapatır. Dolu sha256 tekildir; NULL'lar serbest.
+ * <p>{@code uq_files_invoice_sha256} (E2-DR-1): {@code (invoice_id, sha256)} bileşik tekil
+ * kısıt — Postgres'te V15 KISMİ tekil index ({@code WHERE sha256 IS NOT NULL}) ile, H2/çoğu
+ * DB'de ise birden çok NULL'ı çakışma SAYMAMA davranışıyla aynı niyeti taşır; böylece test
+ * (H2, ddl-auto=create-drop) şeması da fatura-içi-dedup yarışını DB düzeyinde kapatır.
+ * Tekillik artık FATURA başınadır: AYNI faturada aynı içerik (sha256) iki kez bulunamaz, ama
+ * AYNI içerik FARKLI faturalara birer satırla bağlanabilir (byte-aynı dosya iki meşru faturaya
+ * ait olabilir; fizik dosya bir kez saklanır, ikinci satır aynı path'i paylaşır). Dolu sha256
+ * fatura başına tekildir; NULL sha256'lar serbesttir.
  */
 @Entity
-@Table(name = "files", uniqueConstraints = @UniqueConstraint(name = "uq_files_sha256", columnNames = "sha256"))
+@Table(name = "files", uniqueConstraints = @UniqueConstraint(
+        name = "uq_files_invoice_sha256", columnNames = {"invoice_id", "sha256"}))
 @EntityListeners(AuditingEntityListener.class)
 public class FileAsset {
 

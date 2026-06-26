@@ -58,6 +58,9 @@ public class InvoiceController {
      * @param currency    opsiyonel — para birimi (TRY/USD/EUR/GBP; null → TRY)
      * @param description opsiyonel — fatura notuna eklenecek açıklama
      * @param eInvoice    opsiyonel — true ise durum e-Fatura, aksi halde Bulundu
+     * @param kdvRate     opsiyonel — KDV oranı yüzde (E3-11, 0–100; ör. 20.00). Verilirse
+     *                    faturanın brüt TL'sinden matrah + KDV türetilir; null → KDV alanları
+     *                    null. Aralık dışı → 400.
      * @param files       1..N dosya (PDF/XML/JPG/PNG, her biri ≤ 10MB)
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -76,13 +79,14 @@ public class InvoiceController {
             @RequestParam(value = "currency", required = false) Currency currency,
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "eInvoice", required = false, defaultValue = "false") boolean eInvoice,
+            @RequestParam(value = "kdvRate", required = false) BigDecimal kdvRate,
             @RequestParam("files") List<MultipartFile> files,
             Authentication authentication) {
 
         AppUser uploader = resolveUploader(authentication);
 
         InvoiceUploadResponse response = invoiceUploadService.upload(
-                serviceId, month, amount, currency, description, eInvoice, files, uploader);
+                serviceId, month, amount, currency, description, eInvoice, kdvRate, files, uploader);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

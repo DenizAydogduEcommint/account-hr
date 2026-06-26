@@ -122,6 +122,9 @@ public class InvoiceUploadService {
      * @param currency   opsiyonel — para birimi (null ise TRY)
      * @param description opsiyonel — fatura notuna eklenecek serbest açıklama
      * @param eInvoice   true ise durum {@code E_INVOICE}, aksi halde {@code FOUND}
+     * @param kdvRate    opsiyonel — KDV oranı yüzde (E3-11). Verilirse (0–100) faturanın
+     *                   brüt TL'sinden ({@code expense.amountTry}) matrah + KDV türetilir;
+     *                   null ise üç KDV alanı da null kalır. Aralık dışı → 400.
      * @param files      1..N dosya (her biri izinli tip + ≤ 10MB)
      * @param uploader   yükleyen kullanıcı (nullable)
      * @return yükleme özeti (invoice/expense id, durum, depolanan dosyalar)
@@ -133,6 +136,7 @@ public class InvoiceUploadService {
             Currency currency,
             String description,
             boolean eInvoice,
+            BigDecimal kdvRate,
             List<MultipartFile> files,
             AppUser uploader) {
 
@@ -141,6 +145,11 @@ public class InvoiceUploadService {
             throw new StorageException("serviceId zorunludur.");
         }
         YearMonth ym = parseMonth(month);
+        // E3-11: KDV oranı verildiyse makul aralıkta olmalı (0–100). Aralık dışı → 400.
+        if (kdvRate != null
+                && (kdvRate.signum() < 0 || kdvRate.compareTo(new BigDecimal("100")) > 0)) {
+            throw new StorageException("kdvRate 0 ile 100 arasında olmalıdır: " + kdvRate);
+        }
 
         if (files == null || files.isEmpty()) {
             throw new StorageException("En az bir dosya yüklenmelidir.");
@@ -219,6 +228,10 @@ public class InvoiceUploadService {
         // Brand-new invoice'ta eskiden olduğu gibi doğrudan set edilir.
         invoice.setNote(mergeNote(invoicePreexisting ? invoice.getNote() : null,
                 buildNote(description, files)));
+        // E3-11: KDV kırılımı. Oran verildiyse faturanın brüt TL'sinden (KDV-dahil =
+        // expense.amountTry) matrah + KDV türetilir. Brüt yoksa (TL karşılığı bilinmiyor)
+        // yalnızca oran saklanır; net/kdv null kalır. Oran null ise üç alan da null.
+        applyKdv(invoice, expense.getAmountTry(), kdvRate);
         // flush ile invoice id'sini al (dosya depolama bağlamı için).
         invoice = invoiceRepository.saveAndFlush(invoice);
 
@@ -378,6 +391,29 @@ public class InvoiceUploadService {
             return existingNote;
         }
         return hasNew ? newNote : null;
+    }
+
+    /**
+     * E3-11 — Faturaya KDV kırılımını uygular. {@code rate} null ise üç KDV alanı da null'a
+     * çekilir (oran kaldırıldığında temizlenir). Oran verilmişse {@code kdvRate} her zaman
+     * saklanır; matrah + KDV ancak brüt TL ({@code grossTry}) biliniyorsa türetilir, aksi
+     * halde net/kdv null kalır. Brüt negatifse (iade) net/kdv negatif çıkar (doğru).
+     */
+    private void applyKdv(Invoice invoice, BigDecimal grossTry, BigDecimal rate) {
+        if (rate == null) {
+            invoice.setKdvRate(null);
+            invoice.setNetAmountTry(null);
+            invoice.setKdvAmountTry(null);
+            return;
+        }
+        invoice.setKdvRate(rate);
+        if (grossTry == null) {
+            invoice.setNetAmountTry(null);
+            invoice.setKdvAmountTry(null);
+            return;
+        }
+        invoice.setNetAmountTry(KdvCalculator.net(grossTry, rate));
+        invoice.setKdvAmountTry(KdvCalculator.kdv(grossTry, rate));
     }
 
     /** İçeriğin SHA-256 hex digesti (batch-içi dedup için; FileSystemStorageService ile aynı). */

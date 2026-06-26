@@ -81,7 +81,7 @@ class InvoiceUploadRollbackIT extends AbstractDataCleanupIT {
         @Transactional
         public void uploadThenRollback(Long serviceId, String month, MultipartFile file) {
             uploadService.upload(serviceId, month, new BigDecimal("12.34"),
-                    Currency.TRY, "rollback testi", false, List.of(file), null);
+                    Currency.TRY, "rollback testi", false, null, List.of(file), null);
             throw new RuntimeException("forced rollback after upload");
         }
     }

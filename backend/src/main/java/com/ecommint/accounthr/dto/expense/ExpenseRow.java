@@ -74,5 +74,17 @@ public record ExpenseRow(
         @Schema(description = "Satırın kaynağı: STATEMENT (ekstre/importer) veya MANUAL "
                 + "(elle girilen satır, E3-06). Eski satırlarda STATEMENT.",
                 example = "MANUAL")
-        ExpenseSource source) {
+        ExpenseSource source,
+
+        @Schema(description = "E3-11 — KDV (VAT) oranı yüzde (temsilci invoice). Oran "
+                + "girilmemişse null.", example = "20.00", nullable = true)
+        BigDecimal kdvRate,
+
+        @Schema(description = "E3-11 — KDV tutarı TL (temsilci invoice). Oran yoksa null.",
+                example = "20.00", nullable = true)
+        BigDecimal kdvAmountTry,
+
+        @Schema(description = "E3-11 — Matrah / net taban TL (temsilci invoice). Oran yoksa null.",
+                example = "100.00", nullable = true)
+        BigDecimal netAmountTry) {
 }

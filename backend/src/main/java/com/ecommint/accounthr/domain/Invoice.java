@@ -53,6 +53,22 @@ public class Invoice extends BaseEntity {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    /**
+     * E3-11 — KDV (VAT) oranı yüzde olarak (ör. 20.00 = %20). Opsiyonel: oran
+     * girilmediğinde null kalır ve {@link #kdvAmountTry}/{@link #netAmountTry} de null
+     * olur (mevcut faturalar etkilenmez). KDV faturaya (belgeye) aittir, harcamaya değil.
+     */
+    @Column(name = "kdv_rate", precision = 5, scale = 2)
+    private BigDecimal kdvRate;
+
+    /** E3-11 — KDV tutarı (TL), brüt TL'den türetilir: {@code gross - net}. Oran yoksa null. */
+    @Column(name = "kdv_amount_try", precision = 15, scale = 2)
+    private BigDecimal kdvAmountTry;
+
+    /** E3-11 — Matrah / net taban (TL): {@code gross / (1 + rate/100)}. Oran yoksa null. */
+    @Column(name = "net_amount_try", precision = 15, scale = 2)
+    private BigDecimal netAmountTry;
+
     public Expense getExpense() {
         return expense;
     }
@@ -123,5 +139,29 @@ public class Invoice extends BaseEntity {
 
     public void setNote(String note) {
         this.note = note;
+    }
+
+    public BigDecimal getKdvRate() {
+        return kdvRate;
+    }
+
+    public void setKdvRate(BigDecimal kdvRate) {
+        this.kdvRate = kdvRate;
+    }
+
+    public BigDecimal getKdvAmountTry() {
+        return kdvAmountTry;
+    }
+
+    public void setKdvAmountTry(BigDecimal kdvAmountTry) {
+        this.kdvAmountTry = kdvAmountTry;
+    }
+
+    public BigDecimal getNetAmountTry() {
+        return netAmountTry;
+    }
+
+    public void setNetAmountTry(BigDecimal netAmountTry) {
+        this.netAmountTry = netAmountTry;
     }
 }

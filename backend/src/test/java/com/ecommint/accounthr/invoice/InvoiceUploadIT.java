@@ -85,6 +85,7 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
     @Autowired private InvoiceRepository invoiceRepository;
     @Autowired private FileAssetRepository fileAssetRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private com.ecommint.accounthr.service.ExpenseQueryService expenseQueryService;
 
     private String userEmail;
     private Provider provider;
@@ -218,6 +219,36 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
         }
         for (String name : fileNames) {
             // Her dosyaya benzersiz içerik ver ki SHA-256 duplicate'e takılmasın.
+            byte[] content = ("PDF-CONTENT-" + name + "-" + System.nanoTime()).getBytes();
+            ByteArrayResource res = new ByteArrayResource(content) {
+                @Override
+                public String getFilename() {
+                    return name;
+                }
+            };
+            body.add("files", res);
+        }
+        return rest.exchange("/api/v1/invoices", HttpMethod.POST,
+                new HttpEntity<>(body, multipartHeaders()),
+                new ParameterizedTypeReference<Map<String, Object>>() { });
+    }
+
+    /** E3-11 — opsiyonel {@code kdvRate} ile bir multipart upload yapar. */
+    private ResponseEntity<Map<String, Object>> uploadWithKdv(Long serviceId, String month,
+            BigDecimal amount, Currency currency, String kdvRate, List<String> fileNames) {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("serviceId", serviceId);
+        body.add("month", month);
+        if (amount != null) {
+            body.add("amount", amount.toPlainString());
+        }
+        if (currency != null) {
+            body.add("currency", currency.name());
+        }
+        if (kdvRate != null) {
+            body.add("kdvRate", kdvRate);
+        }
+        for (String name : fileNames) {
             byte[] content = ("PDF-CONTENT-" + name + "-" + System.nanoTime()).getBytes();
             ByteArrayResource res = new ByteArrayResource(content) {
                 @Override
@@ -559,5 +590,104 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
         }
         // FileAsset path'i de tam o tek dosyaya işaret etmeli.
         assertThat(assets.get(0).getFilePath()).isEqualTo("2026-03/dup_content_mart.pdf");
+    }
+
+    // --- E3-11: KDV (VAT) kırılımı ------------------------------------------
+
+    /**
+     * E3-11 — kdvRate=20, brüt 120.00 TL → net 100.00, kdv 20.00, oran 20.00 hem invoice'ta
+     * hem expense satırında (ExpenseRow) yüzeye çıkar.
+     */
+    @Test
+    void uploadWithKdvRateDerivesNetAndKdv() {
+        com.ecommint.accounthr.domain.Service s = service("KDV Service");
+
+        ResponseEntity<Map<String, Object>> resp = uploadWithKdv(
+                s.getId(), MONTH, new BigDecimal("120.00"), Currency.TRY, "20",
+                List.of("kdv_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Long invoiceId = ((Number) resp.getBody().get("invoiceId")).longValue();
+        Invoice inv = invoiceRepository.findById(invoiceId).orElseThrow();
+        assertThat(inv.getKdvRate()).isEqualByComparingTo("20.00");
+        assertThat(inv.getNetAmountTry()).isEqualByComparingTo("100.00");
+        assertThat(inv.getKdvAmountTry()).isEqualByComparingTo("20.00");
+
+        // ExpenseRow yüzeyinde de görünür.
+        Long expenseId = ((Number) resp.getBody().get("expenseId")).longValue();
+        var row = expenseQueryService.buildRow(expenseId);
+        assertThat(row.kdvRate()).isEqualByComparingTo("20.00");
+        assertThat(row.netAmountTry()).isEqualByComparingTo("100.00");
+        assertThat(row.kdvAmountTry()).isEqualByComparingTo("20.00");
+        // Brüt (gross) DEĞİŞMEZ: expense.amountTry hâlâ 120.00.
+        assertThat(row.amountTry()).isEqualByComparingTo("120.00");
+    }
+
+    /** E3-11 — kdvRate verilmeden yükleme → üç KDV alanı da null (mevcut davranış). */
+    @Test
+    void uploadWithoutKdvRateLeavesAllNull() {
+        com.ecommint.accounthr.domain.Service s = service("No KDV");
+
+        ResponseEntity<Map<String, Object>> resp = upload(
+                s.getId(), MONTH, new BigDecimal("120.00"), Currency.TRY, null, false,
+                List.of("nokdv_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Long invoiceId = ((Number) resp.getBody().get("invoiceId")).longValue();
+        Invoice inv = invoiceRepository.findById(invoiceId).orElseThrow();
+        assertThat(inv.getKdvRate()).isNull();
+        assertThat(inv.getNetAmountTry()).isNull();
+        assertThat(inv.getKdvAmountTry()).isNull();
+
+        Long expenseId = ((Number) resp.getBody().get("expenseId")).longValue();
+        var row = expenseQueryService.buildRow(expenseId);
+        assertThat(row.kdvRate()).isNull();
+        assertThat(row.netAmountTry()).isNull();
+        assertThat(row.kdvAmountTry()).isNull();
+    }
+
+    /** E3-11 — aralık dışı kdvRate (150) → 400 STORAGE_ERROR. */
+    @Test
+    void uploadWithKdvRateTooHighReturns400() {
+        com.ecommint.accounthr.domain.Service s = service("KDV Too High");
+
+        ResponseEntity<Map<String, Object>> resp = uploadWithKdv(
+                s.getId(), MONTH, new BigDecimal("120.00"), Currency.TRY, "150",
+                List.of("bad_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat((String) resp.getBody().get("error")).isEqualTo("STORAGE_ERROR");
+        // Hiç expense/invoice oluşmadı (rollback).
+        assertThat(expenseRepository.findAll()).isEmpty();
+        assertThat(invoiceRepository.findAll()).isEmpty();
+    }
+
+    /** E3-11 — negatif kdvRate → 400. */
+    @Test
+    void uploadWithNegativeKdvRateReturns400() {
+        com.ecommint.accounthr.domain.Service s = service("KDV Negative");
+
+        ResponseEntity<Map<String, Object>> resp = uploadWithKdv(
+                s.getId(), MONTH, new BigDecimal("120.00"), Currency.TRY, "-1",
+                List.of("neg_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * E3-11 — iade/refund: negatif brüt + oran → net ve kdv negatif (işaretler doğru).
+     */
+    @Test
+    void uploadRefundWithKdvYieldsNegativeNetAndKdv() {
+        com.ecommint.accounthr.domain.Service s = service("KDV Refund");
+
+        ResponseEntity<Map<String, Object>> resp = uploadWithKdv(
+                s.getId(), MONTH, new BigDecimal("-120.00"), Currency.TRY, "20",
+                List.of("refund_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Long invoiceId = ((Number) resp.getBody().get("invoiceId")).longValue();
+        Invoice inv = invoiceRepository.findById(invoiceId).orElseThrow();
+        assertThat(inv.getKdvRate()).isEqualByComparingTo("20.00");
+        assertThat(inv.getNetAmountTry()).isEqualByComparingTo("-100.00");
+        assertThat(inv.getKdvAmountTry()).isEqualByComparingTo("-20.00");
     }
 }

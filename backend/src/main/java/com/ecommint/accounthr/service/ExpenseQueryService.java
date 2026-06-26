@@ -332,6 +332,10 @@ public class ExpenseQueryService {
         String invoiceColorHex = invoiceStatus != null
                 ? StatusColors.STATUS_TO_HEX.get(invoiceStatus) : null;
         String invoiceNote = rep != null ? rep.getNote() : null;
+        // E3-11 — KDV kırılımı temsilci invoice'tan (oran yoksa null).
+        BigDecimal kdvRate = rep != null ? rep.getKdvRate() : null;
+        BigDecimal kdvAmountTry = rep != null ? rep.getKdvAmountTry() : null;
+        BigDecimal netAmountTry = rep != null ? rep.getNetAmountTry() : null;
 
         String accountingEmail = service != null ? emailByService.get(service.getId()) : null;
 
@@ -350,7 +354,10 @@ public class ExpenseQueryService {
                 invoiceStatus,
                 invoiceColorHex,
                 invoiceNote,
-                e.getSource());
+                e.getSource(),
+                kdvRate,
+                kdvAmountTry,
+                netAmountTry);
     }
 
     /**

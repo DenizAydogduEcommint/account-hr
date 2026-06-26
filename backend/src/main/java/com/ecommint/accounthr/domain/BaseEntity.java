@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Version;
 
 /**
  * Ortak kimlik + zaman damgaları. Spring Data JPA auditing ile
@@ -32,6 +33,17 @@ public abstract class BaseEntity {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * Optimistic locking discriminator (E1-DR-1). JPA increments this on every
+     * UPDATE; a stale (detached) copy whose version no longer matches the row
+     * triggers {@code OptimisticLockException} →
+     * {@code ObjectOptimisticLockingFailureException}. No setter — JPA manages it.
+     * DB column {@code version BIGINT NOT NULL DEFAULT 0} (V13). Existing rows → 0.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     public Long getId() {
         return id;
@@ -55,5 +67,10 @@ public abstract class BaseEntity {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    /** Optimistic-lock version (E1-DR-1). Read-only; JPA manages writes. */
+    public Long getVersion() {
+        return version;
     }
 }

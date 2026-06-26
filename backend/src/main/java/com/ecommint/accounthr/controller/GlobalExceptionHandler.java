@@ -10,6 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -154,6 +155,19 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION",
                 "The request conflicts with the current state of a resource.", request, null);
+    }
+
+    /**
+     * Eşzamanlı düzenleme yarışı (E1-DR-1 optimistic locking): bir entity yüklenip
+     * eskimişken (başkası araya UPDATE etti) tekrar güncellenmeye çalışılırsa Hibernate
+     * {@link ObjectOptimisticLockingFailureException} fırlatır → 409 CONFLICT. İstemci
+     * taze veriyle yeniden denemeli. Aksi halde genel handler bunu yanıltıcı 500'e çevirirdi.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_CONFLICT",
+                "The resource was modified by another request. Reload and retry.", request, null);
     }
 
     /**

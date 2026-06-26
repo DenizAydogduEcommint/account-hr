@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 /**
  * İptal edilebilir refresh token kaydı. token_hash, refresh token'ın SHA-256
@@ -45,6 +46,11 @@ public class RefreshToken {
 
     @Column(name = "revoked", nullable = false)
     private boolean revoked = false;
+
+    /** Optimistic locking (E1-DR-1) — revoked flag is mutated on logout/rotation. */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -88,6 +94,11 @@ public class RefreshToken {
 
     public void setRevoked(boolean revoked) {
         this.revoked = revoked;
+    }
+
+    /** Optimistic-lock version (E1-DR-1). Read-only; JPA manages writes. */
+    public Long getVersion() {
+        return version;
     }
 
     public LocalDateTime getCreatedAt() {

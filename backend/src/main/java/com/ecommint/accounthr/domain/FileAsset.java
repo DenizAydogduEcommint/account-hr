@@ -19,13 +19,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 
 /**
  * Fatura dosyası metadata + path. invoice → files 1:N (pdf/xml/statement).
  * Tablo adı `files`. Sadece createdAt taşır (updatedAt yok) — bu yüzden BaseEntity'den türemez.
+ *
+ * <p>{@code uq_files_sha256} (E1-DR-5): sha256 üzerinde tablo düzeyi tekil kısıt — Postgres'te
+ * V9 KISMİ tekil index ({@code WHERE sha256 IS NOT NULL}) ile, H2/çoğu DB'de ise birden çok
+ * NULL'ı çakışma SAYMAMA davranışıyla aynı niyeti taşır; böylece test (H2, ddl-auto=create-drop)
+ * şeması da eşzamanlı-dedup yarışını DB düzeyinde kapatır. Dolu sha256 tekildir; NULL'lar serbest.
  */
 @Entity
-@Table(name = "files")
+@Table(name = "files", uniqueConstraints = @UniqueConstraint(name = "uq_files_sha256", columnNames = "sha256"))
 @EntityListeners(AuditingEntityListener.class)
 public class FileAsset {
 
@@ -64,6 +71,11 @@ public class FileAsset {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by")
     private AppUser uploadedBy;
+
+    /** Optimistic locking (E1-DR-1) — DB column version BIGINT NOT NULL DEFAULT 0 (V13). */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -131,6 +143,11 @@ public class FileAsset {
 
     public void setSha256(String sha256) {
         this.sha256 = sha256;
+    }
+
+    /** Optimistic-lock version (E1-DR-1). Read-only; JPA manages writes. */
+    public Long getVersion() {
+        return version;
     }
 
     public AppUser getUploadedBy() {

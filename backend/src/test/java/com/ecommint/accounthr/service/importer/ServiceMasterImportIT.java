@@ -338,14 +338,24 @@ class ServiceMasterImportIT extends AbstractDataCleanupIT {
      * seçmeli (deterministik id sırası) ki contact ikinci servise yazılıp çiftlenmesin.
      * Aksi halde tekrar çalıştırma her seferinde yeni bir contact yaratırdı (idempotency
      * ihlali; gerçek-Postgres'te {@code contactsCreated=1} ikinci run'da görülmüştü).
+     *
+     * <p>NOT (E1-DR-2): {@code services}'e (name, provider_id) tekil kısıtı eklendiğinden
+     * AYNI sağlayıcıyla isim çiftlemek artık DB'de imkânsızdır. Importer ise eşleşmeyi
+     * normalize edilmiş İSME göre yapar (sağlayıcıdan bağımsız); bu yüzden aynı normalize
+     * isimden iki servis senaryosu, FARKLI sağlayıcıyla yaratılarak hem kısıta uyar hem de
+     * deterministik-seçim yolunu aynen tetikler.
      */
     @Test
     void duplicateNamedServiceContactStaysIdempotentAcrossRuns() {
-        // "Claude AI" zaten seed'de var; aynı isimden İKİNCİ bir servis ekle (çift).
-        Provider anthropic2 = providerRepository.findByNameIgnoreCase("Anthropic").orElseThrow();
+        // "Claude AI" zaten seed'de var (Anthropic sağlayıcısı); aynı NORMALİZE isimden
+        // İKİNCİ bir servis ekle — kısıt nedeniyle FARKLI sağlayıcıyla (Anthropic-Alt).
+        Provider altProvider = new Provider();
+        altProvider.setName("Anthropic-Alt");
+        altProvider = providerRepository.save(altProvider);
+
         com.ecommint.accounthr.domain.Service claudeDup = new com.ecommint.accounthr.domain.Service();
         claudeDup.setName("Claude AI");
-        claudeDup.setProvider(anthropic2);
+        claudeDup.setProvider(altProvider);
         claudeDup.setFrequency(Frequency.AD_HOC);
         claudeDup.setActiveState(ActiveState.UNCERTAIN);
         claudeDup.setInformational(false);

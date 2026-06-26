@@ -14,13 +14,15 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 /**
  * SERVICE-FIRST çekirdek varlık: ödenen tüm servislerin master listesi.
  * "Aktif + Aylık" servisler her ay bir expense satırı bekler; eksikse fatura eksik demektir.
  */
 @Entity
-@Table(name = "services")
+@Table(name = "services", uniqueConstraints = @UniqueConstraint(
+        name = "uq_services_name_provider", columnNames = {"name", "provider_id"}))
 public class Service extends BaseEntity {
 
     @Column(name = "name", nullable = false)

@@ -172,7 +172,9 @@ public class InvoiceFileImportService {
             asset.setFileType(fileType);
             asset.setMimeType(probeMime(file, fileType));
             asset.setSizeBytes(stored.sizeBytes());
-            asset.setSha256(sha256);
+            // DB sha, depolanan dosyanın (copyPreservingPath'in yazdığı bytes) hash'i olmalı —
+            // ilk okumanın hash'i değil. İkisi normalde aynıdır; stored.sha256() kanonik kaynaktır.
+            asset.setSha256(stored.sha256());
             // uploadedBy = null (system migration)
             fileAssetRepository.save(asset);
             newFileRows++;

@@ -2,6 +2,7 @@ package com.ecommint.accounthr.logging;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -33,14 +34,21 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     public static final String MDC_KEY = "correlationId";
     public static final String HEADER = "X-Request-Id";
 
+    /** İstemci-sağlanan correlation id için izin verilen uzunluk + karakter sınırı. */
+    static final int MAX_LENGTH = 64;
+    private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
+        // İstemci X-Request-Id'sini doğrula (log injection/pollution savunması): boş/eksik,
+        // 64 karakterden uzun ya da [A-Za-z0-9-] dışı karakter içeren değer reddedilip yerine
+        // taze bir UUID üretilir. Aksi halde gelen değer aynen kullanılır.
         String correlationId = request.getHeader(HEADER);
-        if (correlationId == null || correlationId.isBlank()) {
+        if (!isValid(correlationId)) {
             correlationId = UUID.randomUUID().toString();
         }
         MDC.put(MDC_KEY, correlationId);
@@ -50,5 +58,13 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         } finally {
             MDC.remove(MDC_KEY);
         }
+    }
+
+    /** Gelen değer non-blank, ≤ {@value #MAX_LENGTH} karakter ve yalnızca [A-Za-z0-9-] ise geçerli. */
+    private static boolean isValid(String value) {
+        return value != null
+                && !value.isBlank()
+                && value.length() <= MAX_LENGTH
+                && SAFE_ID.matcher(value).matches();
     }
 }

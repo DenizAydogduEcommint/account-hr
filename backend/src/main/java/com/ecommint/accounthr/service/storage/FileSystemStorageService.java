@@ -151,14 +151,21 @@ public class FileSystemStorageService implements StorageService {
         String baseName = buildBaseName(serviceName, invoiceDate, fileType);
         Path finalPath = resolveNonClashingName(targetDir, baseName, extension);
 
+        // Atomik taşı; başarısız olursa normal taşımaya düş. Kısmi/başarısız taşımada
+        // temp dosyasının orphan kalmamasını moved bayrağı + finally garanti eder.
+        boolean moved = false;
         try {
-            Files.move(tempFile, finalPath, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException atomicFailed) {
             try {
+                Files.move(tempFile, finalPath, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicFailed) {
                 Files.move(tempFile, finalPath);
-            } catch (IOException e) {
+            }
+            moved = true;
+        } catch (IOException e) {
+            throw new StorageException("Dosya taşınamadı: " + finalPath, e);
+        } finally {
+            if (!moved) {
                 deleteQuietly(tempFile);
-                throw new StorageException("Dosya taşınamadı: " + finalPath, e);
             }
         }
 
@@ -214,27 +221,37 @@ public class FileSystemStorageService implements StorageService {
         String fileName = target.getFileName().toString();
 
         // Idempotent: hedef zaten varsa ve aynı içerikse (SHA-256) yeniden kopyalama.
+        // sha256Of fırlatsa bile temp dosyası finally ile temizlenir (orphan bırakma).
         if (Files.exists(target)) {
-            String existingSha = sha256Of(target);
-            if (sha256.equals(existingSha)) {
+            try {
+                String existingSha = sha256Of(target);
+                if (sha256.equals(existingSha)) {
+                    log.debug("copyPreservingPath atlandı (aynı içerik mevcut): {}", relForReturn);
+                    return new StoredFile(relForReturn, fileName, sha256, size);
+                }
+                // Farklı içerik aynı yolda → migrasyonda olmamalı; üzerine yazmayı reddet.
+                throw new StorageException(
+                        "Hedefte farklı içerikli bir dosya zaten var (üzerine yazılmaz): " + relForReturn);
+            } finally {
                 deleteQuietly(tempFile);
-                log.debug("copyPreservingPath atlandı (aynı içerik mevcut): {}", relForReturn);
-                return new StoredFile(relForReturn, fileName, sha256, size);
             }
-            // Farklı içerik aynı yolda → migrasyonda olmamalı; üzerine yazmayı reddet.
-            deleteQuietly(tempFile);
-            throw new StorageException(
-                    "Hedefte farklı içerikli bir dosya zaten var (üzerine yazılmaz): " + relForReturn);
         }
 
+        // Atomik taşı; başarısız olursa normal taşımaya düş. Kısmi/başarısız taşımada
+        // temp dosyasının orphan kalmamasını moved bayrağı + finally garanti eder.
+        boolean moved = false;
         try {
-            Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException atomicFailed) {
             try {
+                Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicFailed) {
                 Files.move(tempFile, target);
-            } catch (IOException e) {
+            }
+            moved = true;
+        } catch (IOException e) {
+            throw new StorageException("Dosya taşınamadı: " + target, e);
+        } finally {
+            if (!moved) {
                 deleteQuietly(tempFile);
-                throw new StorageException("Dosya taşınamadı: " + target, e);
             }
         }
 

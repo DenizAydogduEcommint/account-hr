@@ -2,15 +2,18 @@ package com.ecommint.accounthr.controller;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -112,7 +115,14 @@ public class FileController {
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(asset));
     }
 
-    /** Bir invoice'a bağlı dosyaların metadata listesi. */
+    /**
+     * Bir invoice'a bağlı dosyaların metadata listesi.
+     *
+     * <p>Geçici yetki kapısı: fatura PDF'leri hassas olduğundan bu okuma/taşıma uçları
+     * yalnızca ADMIN/ACCOUNTING rollerine açıktır. Tam per-invoice (nesne-düzeyi sahiplik)
+     * yetkilendirmesi E3-08'e ertelenmiştir.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @GetMapping
     public List<FileResponse> list(@RequestParam("invoiceId") Long invoiceId) {
         return fileAssetRepository.findByInvoiceId(invoiceId).stream()
@@ -120,7 +130,13 @@ public class FileController {
                 .toList();
     }
 
-    /** Dosya indir (akış). */
+    /**
+     * Dosya indir (akış).
+     *
+     * <p>Geçici yetki kapısı: yalnızca ADMIN/ACCOUNTING (fatura PDF'leri hassas). Tam
+     * per-invoice (nesne-düzeyi sahiplik) yetkilendirmesi E3-08'e ertelenmiştir.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable("id") Long id) {
         FileAsset asset = fileAssetRepository.findById(id)
@@ -131,14 +147,27 @@ public class FileController {
                 ? asset.getMimeType()
                 : MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
+        // RFC 5987 kodlama: migrasyon yolu (copyPreservingPath) kaynak dosya adlarını
+        // aynen korur (slugify edilmez); bu nedenle dosya adı CR/LF/" içerebilir. Header
+        // injection'ı önlemek için adı ContentDisposition ile güvenli biçimde kodla.
+        String contentDisposition = ContentDisposition.attachment()
+                .filename(asset.getFileName(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
+
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + asset.getFileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                 .body(resource);
     }
 
-    /** Dosyayı trash/ klasörüne taşı (silmez). */
+    /**
+     * Dosyayı trash/ klasörüne taşı (silmez).
+     *
+     * <p>Geçici yetki kapısı: yalnızca ADMIN/ACCOUNTING. Tam per-invoice (nesne-düzeyi
+     * sahiplik) yetkilendirmesi E3-08'e ertelenmiştir.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @PostMapping("/{id}/trash")
     public ResponseEntity<FileResponse> trash(@PathVariable("id") Long id) {
         storageService.moveToTrash(id);
@@ -147,7 +176,13 @@ public class FileController {
         return ResponseEntity.ok(FileResponse.from(asset));
     }
 
-    /** Dosyayı waiting/ klasörüne taşı. */
+    /**
+     * Dosyayı waiting/ klasörüne taşı.
+     *
+     * <p>Geçici yetki kapısı: yalnızca ADMIN/ACCOUNTING. Tam per-invoice (nesne-düzeyi
+     * sahiplik) yetkilendirmesi E3-08'e ertelenmiştir.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @PostMapping("/{id}/waiting")
     public ResponseEntity<FileResponse> waiting(@PathVariable("id") Long id) {
         storageService.moveToWaiting(id);

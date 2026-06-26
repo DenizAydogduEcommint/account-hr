@@ -1,6 +1,7 @@
 package com.ecommint.accounthr.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -65,7 +66,33 @@ public class ServiceQueryService {
             String q, Pageable pageable) {
         Specification<com.ecommint.accounthr.domain.Service> spec = buildSpec(active, frequency, q);
         Page<com.ecommint.accounthr.domain.Service> page = serviceRepository.findAll(spec, pageable);
-        return PagedResponse.from(page, this::toResponse);
+        // N+1 fix — sayfa içeriğinin TÜM iletişim kayıtlarını TEK toplu sorguyla çek
+        // (per-row findByServiceId yerine) ve servis ID'sine göre grupla.
+        List<com.ecommint.accounthr.domain.Service> content = page.getContent();
+        Map<Long, List<ServiceContactDto>> contactsByService = contactsByService(content);
+        return PagedResponse.from(page, content,
+                s -> toResponse(s, contactsByService.getOrDefault(s.getId(), List.of())));
+    }
+
+    /**
+     * N+1 fix — Verilen servislerin iletişim kayıtlarını TEK {@code findByServiceIdIn}
+     * sorgusuyla çekip {@code serviceId → List<ServiceContactDto>} olarak gruplar.
+     */
+    private Map<Long, List<ServiceContactDto>> contactsByService(
+            List<com.ecommint.accounthr.domain.Service> services) {
+        List<Long> ids = services.stream()
+                .map(com.ecommint.accounthr.domain.Service::getId)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<ServiceContactDto>> byService = new java.util.HashMap<>();
+        for (ServiceContact c : serviceContactRepository.findByServiceIdIn(ids)) {
+            byService.computeIfAbsent(c.getService().getId(), k -> new java.util.ArrayList<>())
+                    .add(toContactDto(c));
+        }
+        return byService;
     }
 
     private Specification<com.ecommint.accounthr.domain.Service> buildSpec(
@@ -89,14 +116,27 @@ public class ServiceQueryService {
         };
     }
 
-    /** Entity → zengin {@link ServiceResponse} (contacts dahil). Açık transaction içinde. */
+    /**
+     * Entity → zengin {@link ServiceResponse} (tek servis; contacts'ı kendi çeker).
+     * Command (create/update/setActive) yolu için — tek satır olduğundan N+1 yoktur.
+     * Açık transaction içinde çağrılmalı.
+     */
     ServiceResponse toResponse(com.ecommint.accounthr.domain.Service s) {
-        Provider provider = s.getProvider();
-        Card card = s.getDefaultCard();
-        Team team = s.getUsingTeam();
         List<ServiceContactDto> contacts = serviceContactRepository.findByServiceId(s.getId()).stream()
                 .map(ServiceQueryService::toContactDto)
                 .toList();
+        return toResponse(s, contacts);
+    }
+
+    /**
+     * Entity → zengin {@link ServiceResponse} (önceden toplu çekilmiş contacts ile).
+     * Açık transaction içinde çağrılmalı.
+     */
+    ServiceResponse toResponse(com.ecommint.accounthr.domain.Service s,
+            List<ServiceContactDto> contacts) {
+        Provider provider = s.getProvider();
+        Card card = s.getDefaultCard();
+        Team team = s.getUsingTeam();
         return new ServiceResponse(
                 s.getId(),
                 s.getName(),

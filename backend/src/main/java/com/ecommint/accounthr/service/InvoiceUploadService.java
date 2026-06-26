@@ -56,9 +56,11 @@ import com.ecommint.accounthr.service.storage.StoredFile;
  *   <li><b>Expense</b>: servis + period için zaten bir harcama varsa (ör. E2-01 ile
  *       gelen "Bekleniyor" satırı) o KULLANILIR; yoksa yenisi oluşturulur (kart =
  *       servisin varsayılan kartı, tutar/para birimi girdiden — bilgi-amaçlı=false).</li>
- *   <li><b>Invoice</b>: expense'in EXPECTED durumundaki bir invoice'u varsa o
- *       güncellenir; yoksa yeni invoice oluşturulur. Durum = e-Fatura seçiliyse
- *       {@code E_INVOICE} aksi halde {@code FOUND}; not yüklenen dosya adlarını içerir.</li>
+ *   <li><b>Invoice</b>: expense'in (durumundan bağımsız) temsilci — en yüksek id'li —
+ *       invoice'u varsa o güncellenir; yoksa yeni invoice oluşturulur. Böylece re-upload
+ *       mevcut FOUND/E_INVOICE invoice'u tekrar kullanır (duplicate invoice yaratmaz).
+ *       Durum = e-Fatura seçiliyse {@code E_INVOICE} aksi halde {@code FOUND}; not yüklenen
+ *       dosya adlarını içerir.</li>
  * </ul>
  *
  * <p><b>NOT (E3-07):</b> durum doğrudan set ediliyor (MVP). İleride E3-07 state
@@ -152,10 +154,13 @@ public class InvoiceUploadService {
         Period period = resolveOrCreatePeriod(ym);
 
         // --- 3) Expense (find-or-create) ------------------------------------
+        // Bilgi-amaçlı (informational=true: Multinet/sigorta) expense'ler HARİÇ tutulur:
+        // yüklenen fatura asla bir bilgi-amaçlı harcamaya bağlanmamalı (operasyonel akış).
         List<Expense> existing = expenseRepository.findByPeriodId(period.getId());
         Expense expense = existing.stream()
                 .filter(e -> e.getService() != null
-                        && service.getId().equals(e.getService().getId()))
+                        && service.getId().equals(e.getService().getId())
+                        && !e.isInformational())
                 .findFirst()
                 .orElse(null);
         boolean expenseCreated = false;
@@ -176,9 +181,13 @@ public class InvoiceUploadService {
         InvoiceStatus targetStatus = eInvoice ? InvoiceStatus.E_INVOICE : InvoiceStatus.FOUND;
         Provider provider = service.getProvider();
 
+        // FIX 4 (E3): Re-upload sırasında DUPLICATE invoice oluşturma. Önceki mantık yalnızca
+        // EXPECTED bir invoice'u yeniden kullanıyordu; expense'in zaten FOUND/E_INVOICE bir
+        // invoice'u varsa İKİNCİ bir FOUND invoice yaratıyordu (orphan + şişmiş sayım). Çözüm:
+        // statüsünden BAĞIMSIZ olarak temsilci (en yüksek id'li) mevcut invoice'u yeniden
+        // kullan — durumunu FOUND/E_INVOICE'a güncelle, dosya/not ekle.
         Invoice invoice = invoiceRepository.findByExpenseId(expense.getId()).stream()
-                .filter(i -> i.getStatus() == InvoiceStatus.EXPECTED)
-                .findFirst()
+                .max(java.util.Comparator.comparing(Invoice::getId))
                 .orElse(null);
         boolean invoicePreexisting = invoice != null;
         if (invoice == null) {

@@ -127,6 +127,12 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
 
     /** Verilen statüde bir invoice'lu harcama ekler (informational=false). */
     private void expenseWithInvoice(com.ecommint.accounthr.domain.Service s, InvoiceStatus status) {
+        expenseWithInvoice(s, status, false);
+    }
+
+    /** Verilen statüde bir invoice'lu harcama ekler (informational seçilebilir). */
+    private void expenseWithInvoice(com.ecommint.accounthr.domain.Service s, InvoiceStatus status,
+            boolean informational) {
         Expense e = new Expense();
         e.setService(s);
         e.setPeriod(period);
@@ -134,7 +140,7 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
         e.setAmount(new BigDecimal("100.00"));
         e.setCurrency(Currency.TRY);
         e.setAmountTry(new BigDecimal("100.00"));
-        e.setInformational(false);
+        e.setInformational(informational);
         expenseRepository.save(e);
 
         Invoice inv = new Invoice();
@@ -234,6 +240,22 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
         service("Multinet Bilgi", Frequency.MONTHLY, ActiveState.YES, true, null);
 
         assertThat(missingNames(MONTH)).doesNotContain("Multinet Bilgi");
+    }
+
+    /**
+     * Bir servisin SADECE bilgi-amaçlı ({@code informational=true}) bir expense'i FOUND
+     * invoice taşısa bile o servis eksik listesinden DÜŞMEZ: found-set sorgusu
+     * informational expense'leri hariç tutar (aksi halde dashboard missingCount çarpılır).
+     */
+    @Test
+    void informationalFoundExpenseDoesNotClearServiceFromMissing() {
+        com.ecommint.accounthr.domain.Service s =
+                service("Bilgi-Found Eksik", Frequency.MONTHLY, ActiveState.YES, false, null);
+        // Operasyonel (informational=false) FOUND invoice YOK; yalnızca informational FOUND var.
+        expenseWithInvoice(s, InvoiceStatus.FOUND, true);
+
+        // Hâlâ eksik olmalı (informational FOUND onu temizleyemez).
+        assertThat(missingNames(MONTH)).contains("Bilgi-Found Eksik");
     }
 
     /** YEARLY + YES, Aktif Aylar bu ayı İÇERİYOR, fatura yok → eksik. */

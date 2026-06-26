@@ -97,9 +97,10 @@ public class ExpenseQueryService {
         Page<Expense> mainPage = expenseRepository.findAll(spec, pageable);
         List<Expense> mainContent = mainPage.getContent();
         Map<Long, Invoice> repInvoices = representativeInvoices(mainContent);
+        Map<Long, String> mainEmails = primaryEmails(mainContent);
         PagedResponse<ExpenseRow> main = PagedResponse.from(
                 mainPage, mainContent,
-                e -> toRow(e, repInvoices.get(e.getId())));
+                e -> toRow(e, repInvoices.get(e.getId()), mainEmails));
 
         // Operasyonel toplam: dönem geneli (E2-05), filtreden bağımsız.
         BigDecimal operationalTotalTry = orZero(
@@ -108,9 +109,10 @@ public class ExpenseQueryService {
         // Bilgi-amaçlı satırlar: AYRI liste, operasyonel toplama dahil değil.
         List<Expense> infoExpenses = expenseRepository.findInformationalByPeriod(periodId);
         Map<Long, Invoice> infoReps = representativeInvoices(infoExpenses);
+        Map<Long, String> infoEmails = primaryEmails(infoExpenses);
         List<ExpenseRow> informationalRows = new ArrayList<>(infoExpenses.size());
         for (Expense e : infoExpenses) {
-            informationalRows.add(toRow(e, infoReps.get(e.getId())));
+            informationalRows.add(toRow(e, infoReps.get(e.getId()), infoEmails));
         }
         BigDecimal informationalTotalTry = orZero(
                 expenseRepository.sumInformationalAmountTryByPeriod(periodId));
@@ -191,7 +193,7 @@ public class ExpenseQueryService {
     }
 
     /** Entity → {@link ExpenseRow} (12 kolon). Açık transaction içinde çağrılmalı. */
-    private ExpenseRow toRow(Expense e, Invoice rep) {
+    private ExpenseRow toRow(Expense e, Invoice rep, Map<Long, String> emailByService) {
         com.ecommint.accounthr.domain.Service service = e.getService();
         Provider provider = service != null ? service.getProvider() : null;
         Card card = e.getCard();
@@ -202,7 +204,7 @@ public class ExpenseQueryService {
                 ? StatusColors.STATUS_TO_HEX.get(invoiceStatus) : null;
         String invoiceNote = rep != null ? rep.getNote() : null;
 
-        String accountingEmail = service != null ? primaryEmail(service.getId()) : null;
+        String accountingEmail = service != null ? emailByService.get(service.getId()) : null;
 
         return new ExpenseRow(
                 e.getId(),
@@ -222,20 +224,30 @@ public class ExpenseQueryService {
     }
 
     /**
-     * Servisin "Muhasebe E-posta" değeri: birincil ({@code isPrimary=true}) iletişim
-     * e-postası; yoksa ilk e-postası olan iletişim; hiç yoksa {@code null}.
+     * E3-03 N+1 fix — Sayfa içeriğinin servis ID'leri için "Muhasebe E-posta" eşlemesi,
+     * TEK toplu sorguyla ({@code findByServiceIdIn}; per-row {@code findByServiceId} yerine).
+     * Birincil ({@code isPrimary=true}) e-posta önce gelir ({@code isPrimary DESC, id ASC});
+     * {@code putIfAbsent} ile servis başına ilk geçerli e-posta (birincil yoksa ilk) seçilir.
+     * {@code MissingInvoiceService.primaryEmails()} ile aynı desen.
      */
-    private String primaryEmail(Long serviceId) {
-        List<ServiceContact> contacts = serviceContactRepository.findByServiceId(serviceId);
-        ServiceContact primary = contacts.stream()
-                .filter(ServiceContact::isPrimary)
-                .filter(c -> StringUtils.hasText(c.getEmail()))
-                .findFirst()
-                .orElseGet(() -> contacts.stream()
-                        .filter(c -> StringUtils.hasText(c.getEmail()))
-                        .findFirst()
-                        .orElse(null));
-        return primary != null ? primary.getEmail() : null;
+    private Map<Long, String> primaryEmails(List<Expense> expenses) {
+        List<Long> serviceIds = expenses.stream()
+                .map(Expense::getService)
+                .filter(s -> s != null)
+                .map(com.ecommint.accounthr.domain.Service::getId)
+                .distinct()
+                .toList();
+        if (serviceIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> byService = new HashMap<>();
+        for (ServiceContact c : serviceContactRepository.findByServiceIdIn(serviceIds)) {
+            if (!StringUtils.hasText(c.getEmail())) {
+                continue;
+            }
+            byService.putIfAbsent(c.getService().getId(), c.getEmail());
+        }
+        return byService;
     }
 
     private static BigDecimal orZero(BigDecimal value) {

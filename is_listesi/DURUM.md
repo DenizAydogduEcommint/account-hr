@@ -11,6 +11,13 @@
 
 **Gerçek Postgres doğrulaması (2026-06-25):** E1-01…E1-04 lokal PostgreSQL 14'te uçtan uca doğrulandı (Docker gerekmedi). Flyway V1–V4 başarıyla uygulandı, `ddl-auto=validate` entity↔migration uyumu geçti, seed (3 kart + 6 period + admin) yüklendi, `/api/health` UP, login + `/api/auth/me` çalıştı, yanlış parola 401, storage root + waiting/trash oluştu. Ayrıca **frontend tarayıcı (Playwright) testi**: authGuard yönlendirme → admin login → dashboard "API: UP" (Angular→backend uçtan uca) → Çıkış → login; console 0 hata. Not: hedef PG 16; 14'te doğrulandı, sürüme özgü migration yok.
 
+**E SERİSİ BÜTÜNSEL CODE REVIEW (2026-06-26):** Tüm E1+E2+E3 kod tabanı 4 paralel adversarial review agent ile tarandı (güvenlik/auth · E2 migrasyon/storage · E3 backend · frontend). **18 yüksek-güvenli bulgu, hepsi düzeltildi** (backend 186 test, frontend tsc/ng build temiz):
+- **Güvenlik:** open redirect (login returnUrl), Content-Disposition header injection (FileController), file endpoint IDOR → interim rol-gate (ADMIN/ACCOUNTING), committed DB password (docker yml), X-Request-Id validation.
+- **Correctness:** auth interceptor sonsuz-döngü sentinel (retried context), shareReplay refCount, upload duplicate-invoice (temsilci invoice reuse), missing-check informational=false filtre, uploaded event tip uyumu.
+- **Robustness:** copyPreservingPath orphan temp + atomic-move cleanup, two-pass SHA (InvoiceFileImport).
+- **Perf:** 2× contact N+1 (ExpenseQuery + ServiceQuery batch'lendi). **Frontend:** 3× subscription leak (ngOnDestroy).
+- **Kalan borç:** file per-invoice ownership → E3-08; ana-satır lazy N+1 → E3-03-1 (kısmen, contact N+1 çözüldü).
+
 ---
 
 ## E1 — Temel Altyapı & Veri Modeli

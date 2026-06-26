@@ -72,9 +72,15 @@ public interface ExpenseRepository
      * birden çok invoice'u olabilir (iade / invoice+receipt); herhangi biri FOUND/E_INVOICE
      * ise servis o ay için "bulundu" sayılır. Bekleniyor ({@code EXPECTED}) ya da hiç invoice
      * olmaması bu kümeye katkı vermez → servis eksik kalır.
+     *
+     * <p>Bilgi-amaçlı ({@code informational=true}) expense'ler HARİÇ tutulur: böyle bir
+     * harcamanın FOUND invoice'u olsa bile servisi eksik listesinden yanlışlıkla düşürmez
+     * (dashboard {@code missingCount}'ı çarpıtmaz). Çapraz doğrulama yalnızca operasyonel
+     * (ana) harcamalar üzerinden yapılır.
      */
     @Query("SELECT DISTINCT e.service.id FROM Expense e JOIN Invoice i ON i.expense = e "
             + "WHERE e.period.id = :periodId "
+            + "AND e.informational = false "
             + "AND i.status IN (com.ecommint.accounthr.domain.enums.InvoiceStatus.FOUND, "
             + "com.ecommint.accounthr.domain.enums.InvoiceStatus.E_INVOICE)")
     List<Long> findServiceIdsWithFoundInvoiceInPeriod(

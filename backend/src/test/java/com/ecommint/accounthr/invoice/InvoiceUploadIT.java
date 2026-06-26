@@ -448,6 +448,40 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
     }
 
     /**
+     * FIX 4 (E3) — Zaten FOUND bir expense'e re-upload İKİNCİ bir invoice oluşturmaz;
+     * mevcut (temsilci) invoice yeniden kullanılır. Önceki mantık yalnızca EXPECTED
+     * invoice'u tekrar kullandığından FOUND bir expense'e tekrar yükleme orphan FOUND
+     * invoice yaratıyordu (şişmiş sayım).
+     */
+    @Test
+    void reuploadToAlreadyFoundExpenseDoesNotCreateSecondInvoice() {
+        com.ecommint.accounthr.domain.Service s = service("Re-upload");
+        Period p = period(MONTH, 2026, 3);
+
+        // İlk yükleme: EXPECTED → FOUND.
+        Expense expense = expectedExpense(s, p);
+        ResponseEntity<Map<String, Object>> first = upload(
+                s.getId(), MONTH, new BigDecimal("10.00"), Currency.TRY,
+                null, false, List.of("ru_mart.pdf"));
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Long firstInvoiceId = ((Number) first.getBody().get("invoiceId")).longValue();
+        assertThat(invoiceRepository.findByExpenseId(expense.getId())).hasSize(1);
+
+        // İkinci yükleme (re-upload) AYNI expense'e: yeni invoice YARATMAMALI.
+        ResponseEntity<Map<String, Object>> second = upload(
+                s.getId(), MONTH, new BigDecimal("20.00"), Currency.TRY,
+                null, false, List.of("ru_mart_2.pdf"));
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Long secondInvoiceId = ((Number) second.getBody().get("invoiceId")).longValue();
+
+        // Hâlâ TEK invoice (aynı id) ve durumu FOUND.
+        List<Invoice> invoices = invoiceRepository.findByExpenseId(expense.getId());
+        assertThat(invoices).hasSize(1);
+        assertThat(secondInvoiceId).isEqualTo(firstInvoiceId);
+        assertThat(invoices.get(0).getStatus()).isEqualTo(InvoiceStatus.FOUND);
+    }
+
+    /**
      * FIX 3 — Tek istekte AYNI içerikli iki dosya → TEK fiziksel dosya + TEK FileAsset,
      * 201 (orphan yok, 409 yok). Batch-içi SHA-256 dedup ikinci dosyayı yazmaz.
      */

@@ -33,6 +33,7 @@ import com.ecommint.accounthr.repository.AppUserRepository;
 import com.ecommint.accounthr.repository.FileAssetRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.service.FileUploadService;
+import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StorageService;
 
@@ -148,8 +149,18 @@ public class FileController {
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable("id") Long id) {
         FileAsset asset = fileAssetRepository.findById(id)
-                .orElseThrow(() -> new StorageException("Dosya kaydı bulunamadı: id=" + id));
-        Resource resource = storageService.loadAsResource(id);
+                .orElseThrow(() -> new ResourceNotFoundException("Dosya kaydı bulunamadı: id=" + id));
+
+        // Fiziksel dosya eksik/okunamaz ise loadAsResource StorageException (→400) fırlatır;
+        // indirme sözleşmesi de (önizleme gibi) bunu 404'e çevirir: kayıt var ama dosya yok →
+        // istemci hatası (400) değil, kaynak yok (404). Zaten yüklenmiş asset geçilerek ikinci
+        // DB turu önlenir.
+        Resource resource;
+        try {
+            resource = storageService.loadAsResource(asset);
+        } catch (StorageException e) {
+            throw new ResourceNotFoundException("Dosya bulunamadı: id=" + id);
+        }
 
         String contentType = asset.getMimeType() != null
                 ? asset.getMimeType()
@@ -167,6 +178,78 @@ public class FileController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                 .body(resource);
+    }
+
+    /**
+     * Dosya önizle (akış, satır-içi) — E3-09.
+     *
+     * <p>{@code download} ile AYNI güvenli yol çözümü + akışı kullanır; tek farkı
+     * {@code Content-Disposition: inline}'dır: tarayıcı dosyayı İNDİRMEK yerine iframe/img
+     * içinde RENDER eder. {@code Content-Type} depolanan {@code mimeType}'tan gelir
+     * (application/pdf, image/jpeg, image/png). XML için {@code text/xml; charset=utf-8}
+     * kullanılır (tarayıcı ham metni gösterir). {@code mimeType} yoksa tipe göre makul bir
+     * varsayılana düşülür.
+     *
+     * <p>Yetki: ADMIN/ACCOUNTING/TEAM_MEMBER (download ile aynı). FileAsset yoksa VEYA fiziksel
+     * dosya eksik/okunamaz ise → 404 NOT_FOUND (500 DEĞİL). Inline dosya adı RFC 5987 ile güvenli
+     * kodlanır (header injection'a karşı; {@code download} ile aynı).
+     *
+     * <p><b>NOT (MVP):</b> Yanıt basit bir {@link Resource} akışıdır; HTTP Range (kısmi içerik /
+     * byte-range) istekleri DESTEKLENMEZ — büyük PDF'lerde tarayıcı tamamını çeker. İleride
+     * {@code ResourceRegionHttpMessageConverter} ile range desteği eklenebilir.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
+    @GetMapping("/{id}/preview")
+    public ResponseEntity<Resource> preview(@PathVariable("id") Long id) {
+        FileAsset asset = fileAssetRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Dosya kaydı bulunamadı: id=" + id));
+
+        // Fiziksel dosya eksik/okunamaz ise loadAsResource StorageException (→400) fırlatır;
+        // önizleme sözleşmesi bunu 404'e çevirir (kaynak yok, istemci hatası değil sunucu 500
+        // de değil). Asıl mesaj (mutlak yol) sızdırılmaz; sabit 404 mesajı döner.
+        Resource resource;
+        try {
+            resource = storageService.loadAsResource(asset);
+        } catch (StorageException e) {
+            throw new ResourceNotFoundException("Önizlenecek dosya bulunamadı: id=" + id);
+        }
+
+        MediaType contentType = resolvePreviewContentType(asset);
+
+        // Inline: tarayıcı render etsin (indirme değil). Dosya adı RFC 5987 ile güvenli kodlanır.
+        String contentDisposition = ContentDisposition.inline()
+                .filename(asset.getFileName(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
+
+        return ResponseEntity.ok()
+                .contentType(contentType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
+                .body(resource);
+    }
+
+    /**
+     * Önizleme {@code Content-Type}'ını belirler. PDF/görüntü için depolanan {@code mimeType}
+     * aynen kullanılır. XML/metin için tarayıcının inline gösterebilmesi adına
+     * {@code text/xml; charset=utf-8}'e normalize edilir. {@code mimeType} yoksa dosya tipinden
+     * makul bir varsayılan türetilir; hiçbiri uymazsa {@code application/octet-stream}.
+     */
+    private MediaType resolvePreviewContentType(FileAsset asset) {
+        String mime = asset.getMimeType();
+        if (mime != null && !mime.isBlank()) {
+            String m = mime.toLowerCase(java.util.Locale.ROOT);
+            // XML/metin → charset'li text/xml ki tarayıcı inline göstersin.
+            if (m.contains("xml")) {
+                return MediaType.parseMediaType("text/xml; charset=utf-8");
+            }
+            return MediaType.parseMediaType(mime);
+        }
+        // mimeType yok → tipe göre varsayılan.
+        return switch (asset.getFileType()) {
+            case PDF -> MediaType.APPLICATION_PDF;
+            case XML -> MediaType.parseMediaType("text/xml; charset=utf-8");
+            default -> MediaType.APPLICATION_OCTET_STREAM;
+        };
     }
 
     /**

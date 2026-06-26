@@ -43,6 +43,16 @@ Menü ve aksiyon butonları role göre gösterilir/gizlenir; backend her endpoin
 - Aynı API mobil tarafından da kullanılacağından yetki backend'de net olmalı
 
 ## Açık Sorular / Riskler
-- Bir kullanıcı birden çok role sahip olabilir mi? (Öneri: evet, rol seti)
-- Muhasebe fatura indirebilir ama düzenleyemez mi? — Öneri: salt-okunur + indirme
-- Servis bazlı yetki (sadece kendi servisleri) gerekecek mi yoksa tüm ekip her şeyi görür mü? — Karar gerekli
+- Bir kullanıcı birden çok role sahip olabilir mi? — **Karar: MVP'de tek rol** (`AppUser.role`); rol-seti ileride.
+- Muhasebe fatura indirebilir ama düzenleyemez mi? — **Karar: salt-okunur + indirme/önizleme** (PATCH status hariç).
+- Servis bazlı yetki (sadece kendi servisleri) mi? — **Karar: MVP'de rol-bazlı, servis-bazlı DEĞİL** (tüm ekip görür); servis-bazlı E4+.
+
+## Tamamlanma Kaydı
+- Durum: Tamamlandı — 2026-06-26
+- YouTrack: IK-245 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend) + account-hr-frontend
+- **Backend:** Her endpoint method-level `@PreAuthorize` ile rol matrisi (backend = tek doğru kaynak). all-three: GET expenses/missing/dashboard/services-read/teams/cards + POST invoices (yükle) + POST expenses (manuel) + GET files list/download. ADMIN+ACCOUNTING: PATCH status, POST files/trash/waiting. ADMIN-only: service create/update/setActive, admin imports/drive/reconciliation. Role→`ROLE_` authority mapping (JwtFilter + CustomUserDetailsService); AccessDenied→403. `auth/me` `@PreAuthorize(isAuthenticated)` + null-guard. `RoleAuthorizationIT` (17 test, 3 rol).
+- **Frontend:** AuthService rol helper'ları (role/hasRole/hasAnyRole/homeRoute). `roleGuard` + `landingGuard` + `/403` ForbiddenComponent. Sidebar menü rol-filtreli (merkezi allowedRoles). Rol-bazlı landing (ADMIN→dashboard, ACCOUNTING→eksik fatura, TEAM_MEMBER→dashboard). Detay modalında durum-değiştirme TEAM_MEMBER'a gizli. Servisler: liste all-three görünür, yönetim (yeni/düzenle/aktif) ADMIN-gizli. 403 logout/crash yapmaz.
+- **Gerçek doğrulama (lokal PG14, 3 rol token):** GET expenses 200×3; PATCH status ACCOUNTING=200, TEAM_MEMBER=403; auth/me token-yok=401 (500 değil). RoleAuthorizationIT 17/17 geçerli-çağrı 403'leri kanıtlıyor.
+- Test: backend 266/266; frontend tsc+ng build temiz. Bağımsız review (role→authority CLEAN, 23 endpoint gate CLEAN); 2 bulgu düzeltildi (auth/me gate; /services frontend read all-three açıldı).
+- **Borç kapandı:** "file per-invoice ownership → E3-08" — file endpoint'leri artık rol-bazlı yetkili (download/list all-three, trash/waiting ADMIN+ACCOUNTING).

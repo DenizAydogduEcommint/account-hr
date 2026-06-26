@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-26
-**Özet:** E1 + E2 epic tamam · E3 ilerliyor (E3-01..07 ✅, kalan E3-08/E3-09) · **MVP çekirdeği çalışıyor** (eksik fatura tespit + fatura yükleme + manuel giriş + durum state machine) · **MVP = E1 + E2 + E3**
+**Özet:** **E1 + E2 + E3 epic TAMAM** (E3 9/9: E3-01..09 ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı**
 
 ## TEKNİK BORÇ: SIFIR (2026-06-26)
 **Politika (CLAUDE.md):** Arkamızda asla teknik borç bırakmayız — bulgu aynı turda kapatılır, "ertele" yok.
@@ -86,8 +86,8 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | E3-05 | Fatura yükleme UI | ✅ | IK-242. **MVP çekirdeği (yükleme).** POST /invoices (atomik, storage). PG14: HepsiBurada upload → FOUND, eksik 2→1, kaynak dokunulmadı. 3 atomicity bulgusu düzeltildi |
 | E3-06 | Manuel harcama girişi | ✅ | POST /expenses, source=MANUAL (V12), GET /teams; borç E3-06-DR-1 (team import) |
 | E3-07 | Fatura durum state machine | ✅ | PATCH /status, renk türetilir, audit otomatik, MVP serbest geçiş; borç E3-07-DR-1 (buildRow readOnly) |
-| E3-08 | Rol bazlı görünümler | ⬜ | |
-| E3-09 | Fatura detay / önizleme | ⬜ | |
+| E3-08 | Rol bazlı görünümler | ✅ | IK-245. Her endpoint @PreAuthorize rol matrisi; frontend roleGuard+menü+403+landing. PG14: 3 rol token (team PATCH→403). RoleAuthorizationIT 17. "file ownership" borcu kapandı |
+| E3-09 | Fatura detay / önizleme | ✅ | IK-246. GET /expenses/{id}/files + /files/{id}/preview (inline, path-ifşasız). Frontend Faturalar bölümü + blob preview (PDF iframe/img/XML), mimeType bazlı. PG14: inline preview + 404'ler doğru |
 
 ## E4 — Banka Ekstresi
 | Görev | Başlık | Durum | Not |

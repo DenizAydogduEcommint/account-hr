@@ -3,6 +3,7 @@ package com.ecommint.accounthr.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,11 +21,14 @@ import com.ecommint.accounthr.domain.Period;
 import com.ecommint.accounthr.domain.Provider;
 import com.ecommint.accounthr.domain.ServiceContact;
 import com.ecommint.accounthr.domain.Team;
+import com.ecommint.accounthr.domain.FileAsset;
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.PagedResponse;
 import com.ecommint.accounthr.dto.expense.ExpenseListResponse;
 import com.ecommint.accounthr.dto.expense.ExpenseRow;
+import com.ecommint.accounthr.dto.file.ExpenseFileResponse;
 import com.ecommint.accounthr.repository.ExpenseRepository;
+import com.ecommint.accounthr.repository.FileAssetRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ServiceContactRepository;
@@ -57,15 +61,53 @@ public class ExpenseQueryService {
     private final ExpenseRepository expenseRepository;
     private final InvoiceRepository invoiceRepository;
     private final ServiceContactRepository serviceContactRepository;
+    private final FileAssetRepository fileAssetRepository;
 
     public ExpenseQueryService(PeriodRepository periodRepository,
             ExpenseRepository expenseRepository,
             InvoiceRepository invoiceRepository,
-            ServiceContactRepository serviceContactRepository) {
+            ServiceContactRepository serviceContactRepository,
+            FileAssetRepository fileAssetRepository) {
         this.periodRepository = periodRepository;
         this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
         this.serviceContactRepository = serviceContactRepository;
+        this.fileAssetRepository = fileAssetRepository;
+    }
+
+    /**
+     * E3-09 — Bir expense'e bağlı TÜM fatura dosyalarının (FileAsset) metadata listesi.
+     *
+     * <p>Çözüm yolu: expense → invoice'ları ({@code invoices} 1:N) → her invoice'un
+     * FileAsset'leri ({@code files} 1:N). Bir expense'in genellikle tek temsilci invoice'u
+     * olsa da, emniyet için TÜM invoice'ların dosyaları toplanır ve {@code file id}'ye göre
+     * tekilleştirilir (aynı fiziksel dosya iki invoice satırını paylaşmaz, ama defensif). Sıra
+     * deterministik: invoice id ASC, sonra file id ASC (LinkedHashMap ile eklenme sırası korunur).
+     *
+     * <p>Fiziksel yol DIŞA VERİLMEZ; UI dosyaya yalnızca {@code id} ile erişir
+     * (preview/download uçları). Dosyası olmayan expense → BOŞ liste (hata değil).
+     *
+     * @throws ResourceNotFoundException expense yoksa (404)
+     */
+    @Transactional(readOnly = true)
+    public List<ExpenseFileResponse> listFiles(Long expenseId) {
+        if (!expenseRepository.existsById(expenseId)) {
+            throw new ResourceNotFoundException("Harcama bulunamadı: id=" + expenseId);
+        }
+        // invoice id ASC sıralı dolaş → dosyalar deterministik sırada gelir.
+        List<Invoice> invoices = new ArrayList<>(invoiceRepository.findByExpenseId(expenseId));
+        invoices.sort(java.util.Comparator.comparing(Invoice::getId));
+
+        // file id'ye göre tekilleştir, eklenme sırasını koru (invoice ASC + file ASC).
+        Map<Long, FileAsset> byFileId = new LinkedHashMap<>();
+        for (Invoice inv : invoices) {
+            List<FileAsset> files = new ArrayList<>(fileAssetRepository.findByInvoiceId(inv.getId()));
+            files.sort(java.util.Comparator.comparing(FileAsset::getId));
+            for (FileAsset f : files) {
+                byFileId.putIfAbsent(f.getId(), f);
+            }
+        }
+        return byFileId.values().stream().map(ExpenseFileResponse::from).toList();
     }
 
     /**

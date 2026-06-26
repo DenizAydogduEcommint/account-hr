@@ -301,6 +301,15 @@ public class FileSystemStorageService implements StorageService {
     public Resource loadAsResource(Long fileId) {
         FileAsset asset = fileAssetRepository.findById(fileId)
                 .orElseThrow(() -> new StorageException("Dosya kaydı bulunamadı: id=" + fileId));
+        return loadAsResource(asset);
+    }
+
+    @Override
+    public Resource loadAsResource(FileAsset asset) {
+        if (asset == null) {
+            throw new StorageException("FileAsset null olamaz.");
+        }
+        // Yol kök altında çözülür + yol-aşımına karşı doğrulanır (id-tabanlı yolla aynı güvenlik).
         Path file = resolveUnderRoot(asset.getFilePath());
         if (!Files.exists(file) || !Files.isReadable(file)) {
             throw new StorageException("Fiziksel dosya okunamıyor: " + asset.getFilePath());

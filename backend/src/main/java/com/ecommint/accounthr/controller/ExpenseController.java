@@ -19,11 +19,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.expense.ExpenseCreateRequest;
 import com.ecommint.accounthr.dto.expense.ExpenseListResponse;
 import com.ecommint.accounthr.dto.expense.ExpenseRow;
 import com.ecommint.accounthr.dto.expense.StatusUpdateRequest;
+import com.ecommint.accounthr.dto.file.ExpenseFileResponse;
 import com.ecommint.accounthr.service.ExpenseCommandService;
 import com.ecommint.accounthr.service.ExpenseQueryService;
 
@@ -140,6 +143,31 @@ public class ExpenseController {
     public ExpenseRow updateStatus(@PathVariable Long id,
             @Valid @RequestBody StatusUpdateRequest request) {
         return expenseCommandService.updateStatus(id, request);
+    }
+
+    /**
+     * E3-09 — Bir harcama satırına (expense) bağlı TÜM fatura dosyalarının metadata listesi.
+     *
+     * <p>Çözüm: expense → invoice'ları → FileAsset'leri (file id'ye göre tekilleştirilmiş).
+     * Her dosya için {@code id, fileName, fileType, mimeType, sizeBytes, uploadedAt, invoiceId,
+     * invoiceStatus} ve UI ipucu {@code previewable} (PDF/JPG/PNG → true, XML → false) döner.
+     * Fiziksel yol DIŞA VERİLMEZ; UI dosyalara yalnızca {@code GET /api/v1/files/{id}/preview}
+     * veya {@code /download} ile erişir.
+     *
+     * <p>Yetki: okuma uçlarıyla aynı (ADMIN/ACCOUNTING/TEAM_MEMBER). Bilinmeyen expense →
+     * 404 NOT_FOUND; dosyası olmayan expense → 200 + boş liste.
+     */
+    @GetMapping("/{expenseId}/files")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING','TEAM_MEMBER')")
+    @Operation(
+            summary = "Bir harcamaya bağlı fatura dosyaları (E3-09)",
+            description = "Expense → invoice'ları → FileAsset'leri. Her dosya için id, fileName, "
+                    + "fileType, mimeType, sizeBytes, uploadedAt, invoiceId, invoiceStatus ve "
+                    + "previewable (PDF/JPG/PNG=true, XML=false) döner. Fiziksel yol verilmez; "
+                    + "dosyaya GET /files/{id}/preview|download ile erişilir. Bilinmeyen expense → "
+                    + "404; dosyasız expense → boş liste. Kimlik doğrulama gerektirir.")
+    public List<ExpenseFileResponse> listFiles(@PathVariable Long expenseId) {
+        return expenseQueryService.listFiles(expenseId);
     }
 
     /**

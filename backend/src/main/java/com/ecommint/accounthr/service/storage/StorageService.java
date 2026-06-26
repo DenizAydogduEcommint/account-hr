@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 import org.springframework.core.io.Resource;
 
+import com.ecommint.accounthr.domain.FileAsset;
 import com.ecommint.accounthr.domain.enums.FileType;
 
 /**
@@ -76,6 +77,20 @@ public interface StorageService {
 
     /** İndirme için dosyayı Resource olarak yükler. */
     Resource loadAsResource(Long fileId);
+
+    /**
+     * İndirme için dosyayı Resource olarak yükler — zaten yüklenmiş bir {@link FileAsset}
+     * kullanır (çağıran {@code findById} yaptıysa ikinci DB turunu önler).
+     *
+     * <p>Yol {@code asset.getFilePath()}'ten çözülür; yol-aşımına (path traversal) karşı
+     * korunur. Fiziksel dosya eksik/okunamaz ise {@link StorageException} fırlatır.
+     *
+     * @param asset metadata kaydı (file_path buradan okunur)
+     * @return okunabilir Resource
+     * @throws StorageException fiziksel dosya yok/okunamıyorsa
+     * @throws StoragePathTraversalException çözülen yol kök dışına çıkarsa
+     */
+    Resource loadAsResource(FileAsset asset);
 
     /**
      * Storage köküne göreli verilen fiziksel dosyayı en-iyi-çaba (best-effort) siler.

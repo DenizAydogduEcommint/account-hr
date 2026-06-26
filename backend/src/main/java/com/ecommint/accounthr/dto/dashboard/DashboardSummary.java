@@ -35,6 +35,11 @@ public record DashboardSummary(
         @Schema(description = "Eksik (beklenen) fatura sayısı = EXPECTED.", example = "4")
         long missingCount,
 
+        @Schema(description = "Eksik servislerin yaklaşık TL toplamı (belgelenememiş tahmini "
+                + "harcama). missingCount ile AYNI satır kümesinden gelir (E3-10); yaklaşık "
+                + "tutarı olmayan satır 0 ekler. Ölçek 2.", example = "5320.00")
+        BigDecimal missingTotalTry,
+
         @Schema(description = "Bulunan fatura sayısı = FOUND + E_INVOICE.", example = "12")
         long foundCount,
 

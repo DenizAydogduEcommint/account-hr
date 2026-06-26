@@ -97,6 +97,7 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | E3-07 | Fatura durum state machine | ✅ | PATCH /status, renk türetilir, audit otomatik, MVP serbest geçiş; borç E3-07-DR-1 (buildRow readOnly) |
 | E3-08 | Rol bazlı görünümler | ✅ | IK-245. Her endpoint @PreAuthorize rol matrisi; frontend roleGuard+menü+403+landing. PG14: 3 rol token (team PATCH→403). RoleAuthorizationIT 17. "file ownership" borcu kapandı |
 | E3-09 | Fatura detay / önizleme | ✅ | IK-246. GET /expenses/{id}/files + /files/{id}/preview (inline, path-ifşasız). Frontend Faturalar bölümü + blob preview (PDF iframe/img/XML), mimeType bazlı. PG14: inline preview + 404'ler doğru |
+| E3-10 | Eksik fatura tutar özeti | ✅ | IK-247. Belgesiz gider TL görünürlüğü (muhasebe incelemesinden). missing wrapper + dashboard missingTotalTry. PG14: Mart eksik=2 → ~2.620,05 ₺ tutarlı. Review 0 bulgu |
 
 ## E4 — Banka Ekstresi
 | Görev | Başlık | Durum | Not |

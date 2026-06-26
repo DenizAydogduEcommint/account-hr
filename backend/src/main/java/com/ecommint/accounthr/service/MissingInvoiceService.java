@@ -1,5 +1,7 @@
 package com.ecommint.accounthr.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +19,7 @@ import com.ecommint.accounthr.domain.Provider;
 import com.ecommint.accounthr.domain.ServiceContact;
 import com.ecommint.accounthr.domain.enums.ActiveState;
 import com.ecommint.accounthr.domain.enums.Frequency;
+import com.ecommint.accounthr.dto.missing.MissingInvoiceListResponse;
 import com.ecommint.accounthr.dto.missing.MissingInvoiceRow;
 import com.ecommint.accounthr.repository.ExpenseRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
@@ -148,6 +151,32 @@ public class MissingInvoiceService {
                     lastSeenByService.get(s.getId())));
         }
         return rows;
+    }
+
+    /**
+     * E3-10 — {@link #findMissing(String)} satırlarını KPI zarfına ({@link MissingInvoiceListResponse})
+     * sarar: {@code count = items.size()} ve {@code approxTotalTry} = her satırın yaklaşık TL
+     * tutarının toplamı (null → 0 katkı). Toplam ölçek 2'ye yuvarlanır (para). Dashboard ile
+     * tek kaynak: {@link com.ecommint.accounthr.service.DashboardService} aynı satır kümesini
+     * kullanır → sayı ve toplam asla çelişmez.
+     */
+    public MissingInvoiceListResponse findMissingResponse(String month) {
+        List<MissingInvoiceRow> rows = findMissing(month);
+        return new MissingInvoiceListResponse(rows, rows.size(), approxTotalTry(rows));
+    }
+
+    /**
+     * Eksik satırların yaklaşık TL toplamı. {@code approxAmountTry == null} olan satır toplama
+     * 0 ekler (ama sayıya dahildir). Sonuç ölçek 2'ye HALF_UP yuvarlanır (money).
+     */
+    public BigDecimal approxTotalTry(List<MissingInvoiceRow> rows) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (MissingInvoiceRow row : rows) {
+            if (row.approxAmountTry() != null) {
+                total = total.add(row.approxAmountTry());
+            }
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
     }
 
     /**

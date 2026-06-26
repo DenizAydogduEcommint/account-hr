@@ -13,6 +13,7 @@ import com.ecommint.accounthr.domain.Period;
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.dashboard.DashboardSummary;
 import com.ecommint.accounthr.dto.dashboard.DashboardSummary.StatusCount;
+import com.ecommint.accounthr.dto.missing.MissingInvoiceRow;
 import com.ecommint.accounthr.repository.ExpenseRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
@@ -82,17 +83,21 @@ public class DashboardService {
         Map<InvoiceStatus, Long> counts = toCountMap(
                 invoiceRepository.countGroupByStatusForPeriod(periodId));
 
-        // DOD (E3-04): "eksik sayısı dashboard ile birebir". missingCount artık eski
-        // EXPECTED-invoice sayısı DEĞİL; servis ↔ ay çapraz doğrulamasından (eksik fatura
-        // ekranıyla TEK kaynak) gelir. İki ekran asla çelişmez.
-        long missingCount = missingInvoiceService.findMissing(echoMonth).size();
+        // DOD (E3-04/E3-10): "eksik sayısı dashboard ile birebir". missingCount ve
+        // missingTotalTry servis ↔ ay çapraz doğrulamasından (eksik fatura ekranıyla TEK
+        // kaynak) gelir — AYNI satır kümesinden türetilir, böylece sayı ve toplam asla
+        // çelişmez. Satırlar TEK kez çekilir.
+        List<MissingInvoiceRow> missingRows = missingInvoiceService.findMissing(echoMonth);
+        long missingCount = missingRows.size();
+        BigDecimal missingTotalTry = missingInvoiceService.approxTotalTry(missingRows);
 
-        return buildSummary(echoMonth, totalTry, expenseCount, counts, missingCount);
+        return buildSummary(echoMonth, totalTry, expenseCount, counts, missingCount, missingTotalTry);
     }
 
     /** Bilinmeyen/boş ay: tüm değerler sıfır, statusCounts 5 girdi (hepsi 0). */
     private DashboardSummary zeroedSummary(String month) {
-        return buildSummary(month, BigDecimal.ZERO, 0L, emptyCountMap(), 0L);
+        return buildSummary(month, BigDecimal.ZERO, 0L, emptyCountMap(), 0L,
+                BigDecimal.ZERO.setScale(2));
     }
 
     /** {@code [InvoiceStatus, Long]} satırlarını eksik durumları 0'a tamamlayan map'e çevirir. */
@@ -115,7 +120,7 @@ public class DashboardService {
     }
 
     private DashboardSummary buildSummary(String month, BigDecimal totalTry, long expenseCount,
-            Map<InvoiceStatus, Long> counts, long missingCount) {
+            Map<InvoiceStatus, Long> counts, long missingCount, BigDecimal missingTotalTry) {
         List<StatusCount> statusCounts = new ArrayList<>(STATUS_ORDER.size());
         for (InvoiceStatus status : STATUS_ORDER) {
             statusCounts.add(new StatusCount(
@@ -130,6 +135,6 @@ public class DashboardService {
 
         return new DashboardSummary(
                 month, totalTry, statusCounts,
-                missingCount, foundCount, investigateCount, expenseCount);
+                missingCount, missingTotalTry, foundCount, investigateCount, expenseCount);
     }
 }

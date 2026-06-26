@@ -232,15 +232,18 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
                 new ParameterizedTypeReference<Map<String, Object>>() { });
     }
 
+    @SuppressWarnings("unchecked")
     private List<String> missingNames(String month) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token());
-        ResponseEntity<List<Map<String, Object>>> resp = rest.exchange(
+        // E3-10: yanıt artık {items, count, approxTotalTry} zarfı.
+        ResponseEntity<Map<String, Object>> resp = rest.exchange(
                 "/api/v1/missing-invoices?month=" + month, HttpMethod.GET,
                 new HttpEntity<>(headers),
-                new ParameterizedTypeReference<List<Map<String, Object>>>() { });
+                new ParameterizedTypeReference<Map<String, Object>>() { });
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return resp.getBody().stream().map(r -> (String) r.get("serviceName")).toList();
+        List<Map<String, Object>> items = (List<Map<String, Object>>) resp.getBody().get("items");
+        return items.stream().map(r -> (String) r.get("serviceName")).toList();
     }
 
     // --- tests --------------------------------------------------------------

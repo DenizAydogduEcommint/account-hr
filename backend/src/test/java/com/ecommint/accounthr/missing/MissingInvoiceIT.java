@@ -117,6 +117,21 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
         return serviceRepository.save(s);
     }
 
+    /** Belirli bir yaklaşık TL tutarı (null olabilir) ile servis ekler. */
+    private com.ecommint.accounthr.domain.Service serviceWithApprox(String name, Frequency freq,
+            ActiveState active, boolean informational, String activeMonths, BigDecimal approx) {
+        com.ecommint.accounthr.domain.Service s = new com.ecommint.accounthr.domain.Service();
+        s.setName(name);
+        s.setProvider(provider);
+        s.setDefaultCard(card);
+        s.setFrequency(freq);
+        s.setActiveState(active);
+        s.setInformational(informational);
+        s.setActiveMonths(activeMonths);
+        s.setApproxAmountTry(approx);
+        return serviceRepository.save(s);
+    }
+
     private void contact(com.ecommint.accounthr.domain.Service s, String email, boolean primary) {
         ServiceContact c = new ServiceContact();
         c.setService(s);
@@ -159,16 +174,24 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
         return (String) resp.getBody().get("accessToken");
     }
 
-    private List<Map<String, Object>> getMissing(String month) {
+    /** Tam yanıt zarfını ({items, count, approxTotalTry}) döner. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getMissingResponse(String month) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(adminToken());
-        ResponseEntity<List<Map<String, Object>>> resp = rest.exchange(
+        ResponseEntity<Map<String, Object>> resp = rest.exchange(
                 "/api/v1/missing-invoices?month=" + month,
                 HttpMethod.GET, new HttpEntity<>(headers),
-                new ParameterizedTypeReference<List<Map<String, Object>>>() { });
+                new ParameterizedTypeReference<Map<String, Object>>() { });
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isNotNull();
         return resp.getBody();
+    }
+
+    /** Yanıt zarfından yalnızca {@code items} satırlarını döner. */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getMissing(String month) {
+        return (List<Map<String, Object>>) getMissingResponse(month).get("items");
     }
 
     private List<String> missingNames(String month) {
@@ -404,5 +427,74 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
 
         assertThat(missingSize).isEqualTo(2);
         assertThat(dashboardMissing).isEqualTo((long) missingSize);
+    }
+
+    // --- E3-10: approxTotalTry -------------------------------------------------
+
+    /**
+     * E3-10 — Yanıt zarfı {count, approxTotalTry} taşır. İki eksik servisin yaklaşık TL
+     * tutarları toplanır; yaklaşık tutarı null olan eksik servis count'a girer ama toplama
+     * 0 ekler.
+     */
+    @Test
+    void missingResponseCarriesApproxTotalTry() {
+        // Eksik #1: 1000.00, Eksik #2: 250.50, Eksik #3: null approx (count'a girer, toplama 0).
+        serviceWithApprox("Eksik A", Frequency.MONTHLY, ActiveState.YES, false, null,
+                new BigDecimal("1000.00"));
+        serviceWithApprox("Eksik B", Frequency.MONTHLY, ActiveState.YES, false, null,
+                new BigDecimal("250.50"));
+        serviceWithApprox("Eksik Null", Frequency.MONTHLY, ActiveState.YES, false, null, null);
+        // Bulundu (eksik değil) → toplama dahil DEĞİL, yüksek tutarlı olsa bile.
+        com.ecommint.accounthr.domain.Service ok = serviceWithApprox(
+                "Bulundu Yüksek", Frequency.MONTHLY, ActiveState.YES, false, null,
+                new BigDecimal("99999.00"));
+        expenseWithInvoice(ok, InvoiceStatus.FOUND);
+
+        Map<String, Object> body = getMissingResponse(MONTH);
+
+        assertThat(((Number) body.get("count")).intValue()).isEqualTo(3);
+        assertThat(new BigDecimal(body.get("approxTotalTry").toString()))
+                .isEqualByComparingTo(new BigDecimal("1250.50"));
+    }
+
+    /** Hiç eksik yoksa zarf boş items, count=0, approxTotalTry=0 döner. */
+    @Test
+    void missingResponseWithNoMissingHasZeroTotal() {
+        com.ecommint.accounthr.domain.Service ok =
+                service("Aylık Tamam", Frequency.MONTHLY, ActiveState.YES, false, null);
+        expenseWithInvoice(ok, InvoiceStatus.FOUND);
+
+        Map<String, Object> body = getMissingResponse(MONTH);
+
+        assertThat(((Number) body.get("count")).intValue()).isEqualTo(0);
+        assertThat(new BigDecimal(body.get("approxTotalTry").toString()))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    /**
+     * E3-10 — DOD tutarlılık: dashboard {@code missingTotalTry} eksik fatura ucunun
+     * {@code approxTotalTry}'siyle birebir aynı (AYNI satır kümesi). null-approx satır her
+     * iki tarafta da count'a girer, toplama 0 ekler.
+     */
+    @Test
+    void dashboardMissingTotalMatchesMissingInvoicesTotal() {
+        serviceWithApprox("Eksik 1", Frequency.MONTHLY, ActiveState.YES, false, null,
+                new BigDecimal("1500.00"));
+        serviceWithApprox("Eksik 2", Frequency.YEARLY, ActiveState.YES, false, "2026-09",
+                new BigDecimal("3000.25"));
+        serviceWithApprox("Eksik 3 Null", Frequency.MONTHLY, ActiveState.YES, false, null, null);
+
+        BigDecimal missingTotal = new BigDecimal(
+                getMissingResponse(MONTH).get("approxTotalTry").toString());
+        BigDecimal dashboardTotal = new BigDecimal(
+                dashboardSummary(MONTH).get("missingTotalTry").toString());
+
+        // 1500.00 + 3000.25 + 0 (null) = 4500.25.
+        assertThat(missingTotal).isEqualByComparingTo(new BigDecimal("4500.25"));
+        assertThat(dashboardTotal).isEqualByComparingTo(missingTotal);
+        // count tutarlılığı (3 eksik servis, biri null-approx).
+        assertThat(((Number) getMissingResponse(MONTH).get("count")).intValue()).isEqualTo(3);
+        assertThat(((Number) dashboardSummary(MONTH).get("missingCount")).longValue())
+                .isEqualTo(3L);
     }
 }

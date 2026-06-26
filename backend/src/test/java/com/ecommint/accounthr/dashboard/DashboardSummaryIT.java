@@ -181,6 +181,9 @@ class DashboardSummaryIT extends AbstractDataCleanupIT {
         // invoice sayısından DEĞİL. Tek aday "DashTest Service" (MONTHLY + YES) bu ay
         // FOUND faturalı harcamaya sahip → eksik DEĞİL → missingCount = 0.
         assertThat(((Number) body.get("missingCount")).longValue()).isEqualTo(0L);
+        // missingTotalTry: eksik yok → 0 (E3-10).
+        assertThat(new BigDecimal(body.get("missingTotalTry").toString()))
+                .isEqualByComparingTo(BigDecimal.ZERO);
         // foundCount = FOUND(2) + E_INVOICE(1) = 3.
         assertThat(((Number) body.get("foundCount")).longValue()).isEqualTo(3L);
         // investigateCount = TO_INVESTIGATE (1).
@@ -221,6 +224,8 @@ class DashboardSummaryIT extends AbstractDataCleanupIT {
                 .isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(((Number) body.get("expenseCount")).longValue()).isEqualTo(0L);
         assertThat(((Number) body.get("missingCount")).longValue()).isEqualTo(0L);
+        assertThat(new BigDecimal(body.get("missingTotalTry").toString()))
+                .isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(((Number) body.get("foundCount")).longValue()).isEqualTo(0L);
         assertThat(((Number) body.get("investigateCount")).longValue()).isEqualTo(0L);
 

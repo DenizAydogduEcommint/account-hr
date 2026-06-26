@@ -149,11 +149,12 @@ class ExpenseCreateIT extends AbstractDataCleanupIT {
     private List<Map<String, Object>> missingRows() {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(adminToken());
-        ResponseEntity<List> resp = rest.exchange(
+        // E3-10: yanıt artık {items, count, approxTotalTry} zarfı.
+        ResponseEntity<Map> resp = rest.exchange(
                 "/api/v1/missing-invoices?month=" + MONTH, HttpMethod.GET,
-                new HttpEntity<>(headers), List.class);
+                new HttpEntity<>(headers), Map.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return (List<Map<String, Object>>) resp.getBody();
+        return (List<Map<String, Object>>) resp.getBody().get("items");
     }
 
     private Map<String, Object> baseRequest() {

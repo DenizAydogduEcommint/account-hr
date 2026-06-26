@@ -3,7 +3,6 @@ package com.ecommint.accounthr.controller;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ecommint.accounthr.dto.missing.MissingInvoiceRow;
+import com.ecommint.accounthr.dto.missing.MissingInvoiceListResponse;
 import com.ecommint.accounthr.service.MissingInvoiceService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,10 +57,11 @@ public class MissingInvoiceController {
                     + "OLMAYANLARI döner (Bekleniyor = henüz fatura yok = eksik). Kullanım "
                     + "bazlı/Ad-hoc servisler dahil değildir. month verilmezse içinde bulunulan "
                     + "ay; bilinmeyen ay → boş liste; biçimsiz → 400 INVALID_MONTH. Eksik sayısı "
-                    + "dashboard sayacıyla birebir aynıdır. Kimlik doğrulama gerektirir.")
-    public List<MissingInvoiceRow> list(@RequestParam(required = false) String month) {
+                    + "dashboard sayacıyla birebir aynıdır. Kimlik doğrulama gerektirir. Yanıt zarf "
+                    + "biçimindedir: {items, count, approxTotalTry} (E3-10).")
+    public MissingInvoiceListResponse list(@RequestParam(required = false) String month) {
         String resolved = resolveMonth(month);
-        return missingInvoiceService.findMissing(resolved);
+        return missingInvoiceService.findMissingResponse(resolved);
     }
 
     /**

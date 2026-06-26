@@ -20,6 +20,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.IllegalStatusTransitionException;
 import com.ecommint.accounthr.service.InvalidExpenseRequestException;
 import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.drive.DriveSyncException;
@@ -255,6 +256,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidExpenseRequest(
             InvalidExpenseRequestException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request, null);
+    }
+
+    /**
+     * E3-07 — İzin verilmeyen fatura durumu geçişi (state machine ihlali) → 409 CONFLICT.
+     * Kaynağın mevcut durumu hedefe geçişe izin vermiyor. MVP'de politika permissive
+     * olduğundan pratikte tetiklenmez; matris sıkılaştırıldığında devreye girer.
+     */
+    @ExceptionHandler(IllegalStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalStatusTransition(
+            IllegalStatusTransitionException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "ILLEGAL_STATUS_TRANSITION", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Okunamayan/bozuk istek gövdesi (ör. geçersiz enum değeri {@code {"status":"GARBAGE"}}
+     * veya bozuk JSON) → 400 VALIDATION_ERROR. Aksi halde genel handler bunu yanıltıcı bir
+     * 500'e çevirirdi. Ham parse detayı (sınıf/konum) yanıta KONMAZ.
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex,
+            HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
+                "Request body is malformed or contains an invalid value.", request, null);
     }
 
     /** İstenen kaynak (ör. id ile servis) bulunamadı → 404 NOT_FOUND. */

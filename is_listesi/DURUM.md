@@ -65,8 +65,8 @@
 | E3-03 | Aylık harcamalar ekranı | ✅ | IK-240. 12 kolonlu tablo + filtreler + bilgi-amaçlı ayrı bölüm. PG14: Şubat 28+23 satır (E2-05 ile birebir). + login göz butonu + varsayılan ay fix. N+1 borç |
 | E3-04 | Eksik fatura ekranı | ✅ | IK-241. **MVP ÇEKİRDEĞİ.** Servis↔ay çapraz doğrulama. PG14: Mart 2 eksik (HepsiBurada, Zoom), dashboard birebir. Bağımsız review temiz |
 | E3-05 | Fatura yükleme UI | ✅ | IK-242. **MVP çekirdeği (yükleme).** POST /invoices (atomik, storage). PG14: HepsiBurada upload → FOUND, eksik 2→1, kaynak dokunulmadı. 3 atomicity bulgusu düzeltildi |
-| E3-06 | Manuel harcama girişi | ⬜ | |
-| E3-07 | Fatura durum state machine | ⬜ | |
+| E3-06 | Manuel harcama girişi | ✅ | POST /expenses, source=MANUAL (V12), GET /teams; borç E3-06-DR-1 (team import) |
+| E3-07 | Fatura durum state machine | ✅ | PATCH /status, renk türetilir, audit otomatik, MVP serbest geçiş; borç E3-07-DR-1 (buildRow readOnly) |
 | E3-08 | Rol bazlı görünümler | ⬜ | |
 | E3-09 | Fatura detay / önizleme | ⬜ | |
 

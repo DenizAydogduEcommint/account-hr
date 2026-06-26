@@ -46,5 +46,16 @@ Bu görev; durum enum'ı, izinli geçişler (Bekleniyor↔Bulundu↔Araştırıl
 - Aynı renk sabitleri dashboard grafiğinde de kullanılır
 
 ## Açık Sorular / Riskler
-- Geçiş kısıtlaması katı mı olsun (örn. Ignored'dan Bulundu'ya geçiş yasak mı)? — Öneri: MVP'de serbest geçiş + audit log, ileride kısıt
-- e-Fatura ile Bulundu ayrımı kullanıcı seçimi mi yoksa fatura kaynağından otomatik mi?
+- Geçiş kısıtlaması katı mı olsun (örn. Ignored'dan Bulundu'ya geçiş yasak mı)? — **Karar: MVP'de serbest geçiş + audit log** (`InvoiceStatusPolicy` 5×5 matris hepsi true; ileride tek-hücre kısıt → 409).
+- e-Fatura ile Bulundu ayrımı kullanıcı seçimi mi yoksa fatura kaynağından otomatik mi? — Kullanıcı seçer (E3-05 eInvoice checkbox + bu ekranda durum dropdown).
+
+## Tamamlanma Kaydı
+- Durum: Tamamlandı — 2026-06-26
+- YouTrack: IK-244 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend) + account-hr-frontend
+- **Backend:** `PATCH /api/v1/expenses/{id}/status` (`isAuthenticated`). Temsilci invoice (max-id) durumu güncellenir; renk/metin `StatusColors`/`StatusText` tek kaynağından TÜRETİLİR (saklanmaz → durum-renk tutarsızlığı imkânsız). `InvoiceStatusPolicy` (5×5 matris, MVP serbest; geçersiz geçiş → 409). Durum değişimi Hibernate audit interceptor ile otomatik audit'lenir (`STATUS_CHANGE`, eski→yeni, changed_by). IGNORED ↔ informational BAĞIMSIZ (operasyonel toplam `informational` flag'ine bağlı, duruma değil). Invoice'suz expense → 404 (veri-bütünlüğü değişmezi; create-on-null kaldırıldı).
+- **Frontend:** E3-03 detay modalında durum-değiştirme dropdown (5 durum, paylaşılan `status-colors.ts` — hardcoded hex yok), renk swatch, "Durumu Kaydet"; başarıda liste+toplam+badge yenilenir. Hata yönetimi: 404→modal kapat+refresh, diğer→re-sync (stale badge gösterimi önlendi).
+- **Gerçek doğrulama (lokal PG14):** PATCH FOUND→TO_INVESTIGATE → 200, colorHex FF9800 (türetildi); `audit_log` STATUS_CHANGE|status|FOUND→TO_INVESTIGATE|changed_by=1; geçersiz enum→400, bilinmeyen id→404; geri alma temiz.
+- Test: backend 230/230 (3 surefire sırasında; +9). Frontend `tsc`/`ng build` temiz.
+- **Bağımsız review:** 0 critical. 2 bulgu düzeltildi (create-on-null orphan riski → 404 fail-fast; frontend error-path stale badge → refresh/re-sync). 8 FOCUS kontrolü (enum uyumu, temsilci invoice, renk tek-kaynak, audit, IGNORED/informational, state machine, güvenlik, lifecycle) temiz.
+- **Borç E3-07-DR-1:** `buildRow` `@Transactional(readOnly)` write-tx içinde yoksayılıyor (latent trap; current correct — audit çalışıyor). İleride `buildRowUnsafe` extract ile tx-niyeti netleştirilecek.

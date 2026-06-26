@@ -10,6 +10,8 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +23,7 @@ import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.expense.ExpenseCreateRequest;
 import com.ecommint.accounthr.dto.expense.ExpenseListResponse;
 import com.ecommint.accounthr.dto.expense.ExpenseRow;
+import com.ecommint.accounthr.dto.expense.StatusUpdateRequest;
 import com.ecommint.accounthr.service.ExpenseCommandService;
 import com.ecommint.accounthr.service.ExpenseQueryService;
 
@@ -108,6 +111,35 @@ public class ExpenseController {
                     + "Kimlik doğrulama gerektirir.")
     public ExpenseRow create(@Valid @RequestBody ExpenseCreateRequest request) {
         return expenseCommandService.create(request);
+    }
+
+    /**
+     * E3-07 — Bir harcama satırının fatura durumunu elle değiştirir
+     * ({@code isAuthenticated()}). Durum, satırın TEMSİLCİ invoice'unda (en güncel =
+     * en yüksek id'li; GET listesiyle aynı tanım) güncellenir. Geçiş bir state machine'den
+     * ({@code InvoiceStatusPolicy}) geçer — MVP'de tüm geçişler serbesttir (permissive +
+     * audit); ileride kapatılan bir geçiş 409 {@code ILLEGAL_STATUS_TRANSITION} döner.
+     *
+     * <p>Yanıt, GET listesindekiyle BİREBİR aynı {@link ExpenseRow}'dur; {@code invoiceStatus}
+     * ve türetilmiş {@code invoiceColorHex} yeni durumu yansıtır (renk/metin tek kaynak
+     * {@code StatusColors}/{@code StatusText}'ten gelir, istekten ALINMAZ). Durum değişimi
+     * {@code audit_log}'a {@code STATUS_CHANGE} (kim + ne zaman + eski→yeni) olarak düşer.
+     *
+     * <p>Doğrulama: bilinmeyen {@code id} → 404 NOT_FOUND; eksik/geçersiz {@code status}
+     * gövdesi → 400 ({@code GlobalExceptionHandler}). IGNORED'a geçiş operasyonel toplamı
+     * DEĞİŞTİRMEZ ({@code informational} bayrağı ayrıdır, dokunulmaz).
+     */
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Fatura durumunu elle değiştir (E3-07)",
+            description = "Satırın temsilci (max-id) invoice'unun durumunu günceller. Geçiş "
+                    + "state machine'den geçer (MVP: permissive + audit). Yanıt GET listesindeki "
+                    + "ExpenseRow; invoiceColorHex durumdan türetilir (tek kaynak). Değişim "
+                    + "audit_log'a STATUS_CHANGE olarak yazılır. Kimlik doğrulama gerektirir.")
+    public ExpenseRow updateStatus(@PathVariable Long id,
+            @Valid @RequestBody StatusUpdateRequest request) {
+        return expenseCommandService.updateStatus(id, request);
     }
 
     /**

@@ -17,6 +17,15 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByExpenseId(Long expenseId);
 
     /**
+     * E3-07 — Bir expense'in TEMSİLCİ (en güncel = en yüksek id'li) invoice'u. Aylık
+     * harcamalar ekranında satırın GÖSTERİLEN durumu bu invoice'tan gelir
+     * ({@code ExpenseQueryService.representativeInvoices} ile AYNI tanım: id ASC sırasında
+     * "son kazanır" = max-id). Elle durum değişimi (PATCH) bu invoice'un durumunu günceller.
+     * Hiç invoice yoksa boş döner.
+     */
+    java.util.Optional<Invoice> findFirstByExpenseIdOrderByIdDesc(Long expenseId);
+
+    /**
      * E3-03 — Verilen expense'lere bağlı TÜM invoice'lar (toplu, N+1'siz). Aylık harcamalar
      * ekranı her satır için temsilci (en güncel = en yüksek id'li) invoice'un durum + notunu
      * gösterir; seçim servis katmanında {@code id}'ye göre yapılır. {@code id ASC} sıralı gelir

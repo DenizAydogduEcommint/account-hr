@@ -14,6 +14,7 @@ import com.ecommint.accounthr.domain.enums.ExpenseSource;
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.expense.ExpenseCreateRequest;
 import com.ecommint.accounthr.dto.expense.ExpenseRow;
+import com.ecommint.accounthr.dto.expense.StatusUpdateRequest;
 import com.ecommint.accounthr.repository.CardRepository;
 import com.ecommint.accounthr.repository.ExpenseRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
@@ -59,6 +60,7 @@ public class ExpenseCommandService {
     private final ExpenseRepository expenseRepository;
     private final InvoiceRepository invoiceRepository;
     private final ExpenseQueryService expenseQueryService;
+    private final InvoiceStatusPolicy statusPolicy;
 
     public ExpenseCommandService(ServiceRepository serviceRepository,
             PeriodRepository periodRepository,
@@ -66,7 +68,8 @@ public class ExpenseCommandService {
             TeamRepository teamRepository,
             ExpenseRepository expenseRepository,
             InvoiceRepository invoiceRepository,
-            ExpenseQueryService expenseQueryService) {
+            ExpenseQueryService expenseQueryService,
+            InvoiceStatusPolicy statusPolicy) {
         this.serviceRepository = serviceRepository;
         this.periodRepository = periodRepository;
         this.cardRepository = cardRepository;
@@ -74,6 +77,66 @@ public class ExpenseCommandService {
         this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
         this.expenseQueryService = expenseQueryService;
+        this.statusPolicy = statusPolicy;
+    }
+
+    /**
+     * E3-07 — Bir harcama satırının fatura durumunu elle değiştirir.
+     *
+     * <p>Durum, satırın TEMSİLCİ invoice'unda (en güncel = en yüksek id'li; GET listesinin
+     * gösterdiğiyle AYNI tanım, {@link ExpenseQueryService}) güncellenir. Geçiş önce
+     * {@link InvoiceStatusPolicy} state machine'inden geçirilir; MVP'de politika permissive
+     * (tüm geçişler serbest) olduğundan reddetme olmaz, ancak ileride bir geçiş kapatılırsa
+     * {@link IllegalStatusTransitionException} (→ 409) atılır.
+     *
+     * <p><b>Audit:</b> durum alanının değişimi {@code AuditInterceptor} tarafından otomatik
+     * yakalanır → bu transaction commit'inde {@code audit_log}'a {@code STATUS_CHANGE} satırı
+     * (changed_by = SecurityContext kullanıcısı, changed_at, status eski→yeni) yazılır. Elle
+     * paralel audit yok.
+     *
+     * <p><b>Invoice yoksa:</b> Hem E2-01 importer hem E3-06 elle giriş her expense için en az
+     * bir invoice oluşturur; bu bir veri-bütünlüğü değişmezidir (her expense'in ≥1 invoice'u
+     * vardır) ve invoice'suz bir expense BEKLENMEZ. Bu durum sessizce iyileştirilmez (yeni
+     * invoice OLUŞTURULMAZ — eşzamanlı PATCH'lerde DB güvencesi olmayan yetim-invoice riski
+     * doğururdu); bunun yerine fail-fast olarak {@link ResourceNotFoundException} (→ 404)
+     * ile yüzeye çıkarılır.
+     *
+     * <p><b>IGNORED ↔ informational bağımsızlığı:</b> Bu metot YALNIZCA invoice durumunu
+     * değiştirir. Expense'in {@code informational} bayrağı (operasyonel toplama dahil/hariç)
+     * AYRI bir kavramdır ve burada DOKUNULMAZ. IGNORED'a geçmek operasyonel toplamı
+     * değiştirmez (toplam {@code informational} bayrağına bağlıdır, invoice durumuna değil —
+     * E2-05/E3-03). Bu ayrım bilinçlidir.
+     *
+     * @throws ResourceNotFoundException         expense yoksa (404)
+     * @throws IllegalStatusTransitionException   geçiş politikaca yasaksa (409; MVP'de olmaz)
+     */
+    @Transactional
+    public ExpenseRow updateStatus(Long expenseId, StatusUpdateRequest request) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Harcama bulunamadı: id=" + expenseId));
+
+        InvoiceStatus target = request.status();
+        Invoice representative = invoiceRepository
+                .findFirstByExpenseIdOrderByIdDesc(expenseId)
+                .orElse(null);
+
+        InvoiceStatus current = representative != null ? representative.getStatus() : null;
+        if (!statusPolicy.isAllowed(current, target)) {
+            throw new IllegalStatusTransitionException(current, target);
+        }
+
+        if (representative == null) {
+            // Veri-bütünlüğü değişmezi: her expense'in ≥1 invoice'u olmalı (importer + E3-06
+            // garanti eder). Invoice'suz expense BEKLENMEZ — sessizce iyileştirmek yerine
+            // (eşzamanlı PATCH yetim-invoice riski) fail-fast 404 ile yüzeye çıkar.
+            throw new ResourceNotFoundException(
+                    "Bu satır için fatura kaydı bulunamadı.");
+        }
+        // Durum alanını güncelle — değişim AuditInterceptor ile STATUS_CHANGE'e dönüşür.
+        representative.setStatus(target);
+
+        return expenseQueryService.buildRow(expense.getId());
     }
 
     /**

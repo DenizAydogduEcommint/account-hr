@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-26
-**Özet:** **E1 + E2 + E3 epic TAMAM** (E3 9/9: E3-01..09 ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı**
+**Özet:** **E1 + E2 + E3 epic TAMAM** (E3 11/11: E3-01..09 + E3-10 eksik-tutar + E3-11 KDV ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit/tutar + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme + KDV ayrımı) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı.** Sıradaki: **E4 (banka ekstresi + eşleştirme motoru — manuel↔ekstre mükerrer-önleme kritik, E4-02)**
 
 ## TEKNİK BORÇ: SIFIR (2026-06-26)
 **Politika (CLAUDE.md):** Arkamızda asla teknik borç bırakmayız — bulgu aynı turda kapatılır, "ertele" yok.

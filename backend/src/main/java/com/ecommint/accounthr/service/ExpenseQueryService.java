@@ -96,7 +96,7 @@ public class ExpenseQueryService {
         // tek toplu sorguyla map'lenir. Böylece toRow döngüsü ek sorgu üretmez.
         Specification<Expense> spec = buildMainSpec(periodId, card, status, q);
         Page<Expense> mainPage = expenseRepository.findAll(spec, pageable);
-        List<Expense> mainContent = mainPage.getContent();
+        List<Expense> mainContent = fetchRefsInPageOrder(mainPage.getContent());
         Map<Long, Invoice> repInvoices = representativeInvoices(mainContent);
         Map<Long, String> mainEmails = primaryEmails(mainContent);
         PagedResponse<ExpenseRow> main = PagedResponse.from(
@@ -208,6 +208,40 @@ public class ExpenseQueryService {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * E3-03-1 ToOne N+1 fix — Sayfa içeriğinin ToOne ilişkilerini ({@code service},
+     * {@code service.provider}, {@code card}, {@code usingTeam}) TEK FETCH-JOIN sorgusuyla
+     * eager-load eder, böylece {@link #toRow} döngüsü bu ilişkilere erişirken per-row SELECT
+     * üretmez (önceden bir sayfada ~200+ ek sorgu).
+     *
+     * <p>Pagination-güvenli iki-sorgu deseni: (1) {@code findAll(spec, pageable)} doğru
+     * sayfalama + count üretir (koleksiyon FETCH yok → count/firstResult/maxResults bozulmaz);
+     * (2) bu metot o sayfanın ID'leri için {@code findByIdInFetchingRefs} ile ToOne ilişkileri
+     * TEK sorguda getirir. Yalnızca {@code *ToOne} fetch edilir (koleksiyon değil), IN listesi
+     * sayfa boyutuyla sınırlıdır → "firstResult/maxResults + collection fetch" tuzağı oluşmaz.
+     *
+     * <p>{@code IN} sonucu sıralı gelmeyebileceğinden, {@code pageable} sort sırası ORİJİNAL
+     * sayfa içeriği sırasına göre yeniden kurulur (id→Expense map + sayfa sırasında map'leme).
+     * Boş sayfada ek sorgu çalıştırılmaz.
+     */
+    private List<Expense> fetchRefsInPageOrder(List<Expense> pageContent) {
+        if (pageContent.isEmpty()) {
+            return pageContent;
+        }
+        List<Long> ids = pageContent.stream().map(Expense::getId).toList();
+        Map<Long, Expense> byId = new HashMap<>();
+        for (Expense e : expenseRepository.findByIdInFetchingRefs(ids)) {
+            byId.put(e.getId(), e);
+        }
+        List<Expense> ordered = new ArrayList<>(pageContent.size());
+        for (Expense original : pageContent) {
+            // Fetch sorgusu sayfadaki her ID'yi döndürmeli; emniyet için map'te yoksa
+            // orijinal (lazy) entity'ye düş.
+            ordered.add(byId.getOrDefault(original.getId(), original));
+        }
+        return ordered;
     }
 
     /**

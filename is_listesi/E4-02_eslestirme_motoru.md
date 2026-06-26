@@ -12,6 +12,8 @@
 ## Amaç
 Ekstreden çıkan ham işlemleri otomatik olarak doğru servise ve harcama satırına eşle (tarih + tutar + işyeri/hizmet). Çoklu çekim ve iade/refund senaryolarını doğru ele alır.
 
+> **KRİTİK NOT (ön-muhasebe domain incelemesi, 2026-06-26):** Bu görevin en kritik yönü **manuel (E3-06) ↔ ekstre mükerrer-önleme**. Şu an manuel satır (`source=MANUAL`) ile ekstre satırı (`source=STATEMENT`) farklı `source_row_hash`'e sahip → aynı işlem iki kez girilirse **çift kayıt** otomatik tespit edilmiyor. Muhasebede mükerrer kayıt en pahalı hata türüdür. Kullanıcı özellikle "unutmayalım" dedi. Eşleştirme anahtarı (kart son4 + tarih±tolerans + tutar±kuruş), tolerans değerleri ve çok-aday durumu (aynı servis aynı ay çoklu çekim) bu görev başlarken netleştirilecek; belirsiz eşleşmede kullanıcı onayı.
+
 ## Açıklama / Bağlam
 E4-01'in ürettiği ham işlemler bu motorla servislere bağlanır. Eşleştirme ipuçları: işyeri/açıklama metni → servis adı (kural/anahtar kelime tablosu), tutar, tarih, kart. Zorluklar:
 - **Çoklu çekim**: OpenAI API gibi servisler ay içinde birden çok kez çekilebilir → her çekim ayrı işlem, hepsi aynı servise bağlanır

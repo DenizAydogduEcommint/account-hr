@@ -104,7 +104,7 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
 | E4-01 | Ekstre yükleme & parse | ⬜ | |
-| E4-02 | Eşleştirme motoru | ⬜ | **KRİTİK: manuel↔ekstre mükerrer-önleme dahil** (ön-muhasebe domain incelemesi 2026-06-26 — çift kayıt riski; kullanıcı "unutmayalım" dedi). Detay: `E4-02_eslestirme_motoru_mukerrer.md` + memory |
+| E4-02 | Eşleştirme motoru | ⬜ | **KRİTİK: manuel↔ekstre mükerrer-önleme dahil** (ön-muhasebe domain incelemesi 2026-06-26 — çift kayıt riski; kullanıcı "unutmayalım" dedi). Detay: `E4-02_eslestirme_motoru.md` + memory |
 | E4-03 | Dönem-içi hareket dökümü | ⬜ | |
 | E4-04 | Eşleşmeyen işlem uyarıları | ⬜ | |
 | E4-05 | Banka/kart normalizasyonu | ⬜ | |

@@ -136,7 +136,10 @@ public class ExpenseCommandService {
         // Durum alanını güncelle — değişim AuditInterceptor ile STATUS_CHANGE'e dönüşür.
         representative.setStatus(target);
 
-        return expenseQueryService.buildRow(expense.getId());
+        // E3-07-DR-1: Bu metot zaten bir yazma @Transactional içinde. buildRowInternal'ı
+        // doğrudan çağırarak yanıltıcı bir iç readOnly-tx illüzyonundan kaçınırız; satır
+        // kurma mevcut yazma tx'inde çalışır, audit flush davranışı değişmez.
+        return expenseQueryService.buildRowInternal(expense.getId());
     }
 
     /**
@@ -185,7 +188,9 @@ public class ExpenseCommandService {
         invoice.setRefund(false);
         invoiceRepository.save(invoice);
 
-        return expenseQueryService.buildRow(expense.getId());
+        // E3-07-DR-1: Mevcut yazma @Transactional içinde — buildRowInternal doğrudan çağrılır
+        // (iç readOnly-tx illüzyonu yok). Davranış değişmez.
+        return expenseQueryService.buildRowInternal(expense.getId());
     }
 
     /**

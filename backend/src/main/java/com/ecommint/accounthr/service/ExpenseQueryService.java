@@ -133,6 +133,22 @@ public class ExpenseQueryService {
      */
     @Transactional(readOnly = true)
     public ExpenseRow buildRow(Long expenseId) {
+        return buildRowInternal(expenseId);
+    }
+
+    /**
+     * E3-07-DR-1 — {@link #buildRow} satır-kurma/eşleme gövdesi, AÇIK bir transaction
+     * sınırı OLMADAN. Tasarımı gereği {@code @Transactional} taşımaz: ya {@link #buildRow}
+     * (salt-okunur read yolundan, kendi {@code readOnly=true} tx'i içinde) ya da MEVCUT bir
+     * yazma transaction'ı içinden ({@code ExpenseCommandService.updateStatus}/{@code create} —
+     * komut yolu) çağrılmalıdır. Böylece komut yolundaki çağrılar dış yazma tx'ine katılır ve
+     * yanıltıcı bir iç {@code readOnly} tx illüzyonu doğmaz; davranış (audit flush dahil)
+     * değişmez. Doğrudan, transaction'sız bir bağlamdan çağrılmamalıdır (lazy ilişkiler için
+     * açık bir sınır gerekir).
+     *
+     * @throws ResourceNotFoundException expense yoksa (çağıran sözleşmesi: id geçerli olmalı)
+     */
+    ExpenseRow buildRowInternal(Long expenseId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Harcama bulunamadı: id=" + expenseId));

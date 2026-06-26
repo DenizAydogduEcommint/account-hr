@@ -175,18 +175,19 @@ public class InvoiceFileImportService {
             boolean sameRunDuplicate = shaSeenThisRun.contains(sha256);
             boolean physicallyPresent = alreadyInDb || sameRunDuplicate; // fizik dosya zaten yazıldı
 
-            // --- Duplicate tespiti (raporlama amaçlı) ---
-            boolean isDuplicate = fileName.toLowerCase(Locale.ROOT).contains("duplicate")
-                    || sameRunDuplicate
-                    || alreadyInDb;
-            if (isDuplicate) {
-                duplicates++;
-            }
-
             // --- Eşleme (her durumda lazım: bağlanacak fatura belirlenir) ---
             boolean inTrash = isUnderTrash(relPath);
             Invoice match = inTrash ? null : findMatch(relPath, noteIndex, baseIndex);
             Long thisInvoiceId = invoiceIdOf(match);
+
+            // --- Duplicate tespiti (raporlama amaçlı) ---
+            // ÖNEMLİ (E2-DR-1): "duplicate" sayacı SADECE gerçek atlamada (genuine skip) artar.
+            // alreadyInDb/sameRunDuplicate, içeriğin fiziken mevcut olduğunu söyler ama meşru bir
+            // ÇAPRAZ-FATURA paylaşımı da bu duruma düşer (aynı bytes, FARKLI fatura → yeni satır,
+            // duplicate DEĞİL). Bu yüzden global sha mevcudiyetiyle sayma; yalnızca aynı (fatura,
+            // sha) ikilisi zaten varsa (continue ile atlanan satır) duplicate say. Dosya adında
+            // "duplicate" geçen kayıtlar (operatör işaretli) her zaman duplicate sayılır.
+            boolean nameMarkedDuplicate = fileName.toLowerCase(Locale.ROOT).contains("duplicate");
 
             if (physicallyPresent) {
                 // E2-DR-1: Bu içeriğin fizik kopyası zaten storage'da var. İki olasılık:
@@ -196,7 +197,12 @@ public class InvoiceFileImportService {
                 //       o faturaya AYRI bir FileAsset satırı oluştur, mevcut fizik path'i YENİDEN
                 //       KULLAN (bytes tekrar kopyalanmaz; dosya bir kez saklanır).
                 if (sameInvoiceShaExists(sha256, thisInvoiceId, shaBoundInvoicesThisRun)) {
+                    duplicates++; // (a) GERÇEK skip → tek duplicate burada sayılır
                     continue; // (a) gerçek-duplicate → atla
+                }
+                // (b) Çapraz-fatura paylaşımı: meşru yeni satır; ad işaretliyse yine duplicate say.
+                if (nameMarkedDuplicate) {
+                    duplicates++;
                 }
                 // (b) Farklı faturaya bağla: mevcut bir FileAsset'in fizik metadatasını yeniden kullan.
                 FileAsset source0 = existingAssetForSha(sha256);
@@ -230,6 +236,12 @@ public class InvoiceFileImportService {
                 continue;
             }
             shaSeenThisRun.add(sha256);
+
+            // Yeni içerik (ilk kez görülüyor). Atlama YOK → duplicate değil; ancak operatör
+            // dosya adına "duplicate" işaretlediyse raporda yine duplicate sayılır.
+            if (nameMarkedDuplicate) {
+                duplicates++;
+            }
 
             // --- Yeni içerik → şimdi (ve yalnızca şimdi) fiziken kopyala ---
             StoredFile stored = copyToStorage(file, relPath);

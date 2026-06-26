@@ -300,8 +300,10 @@ class InvoiceFileImportIT extends AbstractDataCleanupIT {
         assertThat(summary.newFileRows()).isEqualTo(2);     // iki DB satırı
         assertThat(summary.matched()).isEqualTo(2);         // iki faturaya da bağlandı
         assertThat(summary.unmatched()).isZero();
-        // svc_b içeriği svc_a ile aynı → duplicate sayılır (raporlama amaçlı).
-        assertThat(summary.duplicates()).isEqualTo(1);
+        // E2-DR-1 sayaç düzeltmesi: svc_b içeriği svc_a ile AYNI olsa da FARKLI bir faturaya
+        // MEŞRU yeni satır olarak bağlanır (çapraz-fatura paylaşımı) → bu bir gerçek-duplicate
+        // (genuine skip) DEĞİLDİR ve duplicate SAYILMAZ. Sayaç yalnızca atlanan satırlarda artar.
+        assertThat(summary.duplicates()).isZero();
 
         // HER İKİ fatura da kendi FileAsset satırına sahip.
         List<FileAsset> aFiles = fileAssetRepository.findByInvoiceId(invA.getId());

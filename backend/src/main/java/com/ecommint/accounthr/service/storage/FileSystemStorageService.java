@@ -328,6 +328,18 @@ public class FileSystemStorageService implements StorageService {
             log.warn("Orphan silme atlandı (kök dışı yol): {}", relativePath);
             return false;
         }
+        // E2-DR-1: İçerik-paylaşımlı dosya koruması. İki FileAsset satırı AYNI file_path'i
+        // paylaşabilir (byte-aynı dosya iki faturaya bağlı). Bu yol BAŞKA satırlarca da
+        // referans veriliyorsa fiziksel dosyayı SİLME (kardeş satırların referansını kırardı);
+        // DB satırının kaldırılması çağıranın işidir. Mevcut çağıranlar tek dosyalık bir
+        // rollback-cleanup'tır (0 ya da yalnızca kendi satırı) → davranış değişmez; bu yalnızca
+        // paylaşımlı durumu korur.
+        long refCount = fileAssetRepository.findByFilePath(relativePath).size();
+        if (refCount > 1) {
+            log.info("Fiziksel silme atlandı (path {} satır tarafından paylaşılıyor): {}",
+                    refCount, relativePath);
+            return false;
+        }
         try {
             boolean deleted = Files.deleteIfExists(file);
             if (deleted) {
@@ -363,15 +375,29 @@ public class FileSystemStorageService implements StorageService {
         // Hedefte çakışma olursa benzersizleştir.
         String fileName = source.getFileName().toString();
         Path target = uniqueTarget(targetDir, fileName);
+
+        // E2-DR-1: İçerik-paylaşımlı dosya. İki FileAsset satırı AYNI file_path'i paylaşabilir
+        // (byte-aynı dosya iki meşru faturaya bağlı). Bu durumda fizik dosyayı TAŞIMAK (move)
+        // kardeş satırların referansını kırardı. Bu yüzden:
+        //   * Birden fazla satır aynı path'i paylaşıyorsa → fizik dosyayı KOPYALA (orijinali
+        //     kardeşler için yerinde bırak), yalnızca BU satırın file_path'ini güncelle.
+        //   * Tam olarak bir satır referans veriyorsa → mevcut taşı (move) davranışı (paylaşım
+        //     yok, orijinali yerinde bırakmaya gerek yok).
+        long sharers = fileAssetRepository.findByFilePath(asset.getFilePath()).size();
         try {
-            Files.move(source, target);
+            if (sharers > 1) {
+                Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+            } else {
+                Files.move(source, target);
+            }
         } catch (IOException e) {
             throw new StorageIOException("Dosya taşınamadı: " + source + " -> " + target, e);
         }
 
         asset.setFilePath(root.relativize(target).toString());
         fileAssetRepository.save(asset);
-        log.info("Dosya taşındı id={} -> {}", fileId, asset.getFilePath());
+        log.info("Dosya {} id={} -> {}", sharers > 1 ? "kopyalandı (paylaşımlı)" : "taşındı",
+                fileId, asset.getFilePath());
     }
 
     private Path uniqueTarget(Path dir, String fileName) {

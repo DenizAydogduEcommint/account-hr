@@ -4,8 +4,27 @@
 > Her görev bitince: ilgili `E*.md` dosyasına "Tamamlanma Kaydı" eklenir + bu tablo güncellenir + YouTrack'e yorum/durum işlenir.
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
-**Son güncelleme:** 2026-06-25
-**Özet:** 17 / 52 tamamlandı (+ E1-06 CI kısmı) · **E2 EPİC TAMAM (6/6)** · **E3 ilerliyor — MVP çekirdeği çalışıyor (eksik fatura tespit + fatura yükleme)** · **E1 esas olarak bitti**, **E2 başladı** (E2-01 ✓) · **MVP = E1 + E2 + E3**
+**Son güncelleme:** 2026-06-26
+**Özet:** E1 + E2 epic tamam · E3 ilerliyor (E3-01..07 ✅, kalan E3-08/E3-09) · **MVP çekirdeği çalışıyor** (eksik fatura tespit + fatura yükleme + manuel giriş + durum state machine) · **MVP = E1 + E2 + E3**
+
+## TEKNİK BORÇ: SIFIR (2026-06-26)
+**Politika (CLAUDE.md):** Arkamızda asla teknik borç bırakmayız — bulgu aynı turda kapatılır, "ertele" yok.
+Üç derin review turunda (holistic E + E2-derin + E1-derin) bulunan **9 teknik borcun TAMAMI kapatıldı**, ardından kapatma kodu **4 paralel adversarial reviewer** ile denetlendi → çıkan **8 bulgu (4 critical) düzeltildi** → canlı PG'de doğrulandı. **Açık borç kalmadı.**
+
+| Borç | Çözüm | Commit |
+|------|-------|--------|
+| E3-07-DR-1 buildRow readOnly | tx-niyeti netleştirildi (buildRowInternal) | `2b06cb9` |
+| E1-DR-1 optimistic locking yok | @Version 12 entity + V13 | `e1ac925` |
+| E1-DR-2 Service unique yok | (name,provider_id) UNIQUE + V14 | `e1ac925` |
+| E1-DR-5 FileAsset sha256 H2 gap | entity unique constraint | `e1ac925` |
+| E3-06-DR-1 team import yok | ExcelImport Team resolver (Excel'de veri yok, kod hazır) | `e68408a` |
+| E1-DR-3 BigDecimal precision | getDecimal setScale(2,HALF_UP) ×3 | `e68408a` |
+| E3-03-1 ana-satır N+1 | findByIdInFetchingRefs wire (sabit sorgu) | `478f99a` |
+| E2-DR-1 içerik-aynı dosya | (invoice_id,sha256) composite + V15 | `e5329ea` |
+| E1-DR-4 AuditInterceptor hazard | raw-JDBC writer (StatelessSession bırakıldı) | `3aecf5b` |
+| **Review fix** (8 bulgu) | shared-file sibling-guard, audit raw-JDBC connection/proxy fix + try/catch, Team lower-unique V16, isDuplicate sayaç | (bu commit) |
+
+Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2, dashboard=114.355,40, audit STATUS_CHANGE raw-JDBC writer PG'de çalışıyor (changed_by + changed_at dolu), rollback-discard korundu.
 
 **CI durumu (2026-06-25):** Her iki repo GitHub Actions **yeşil** (gh ile teyit edildi). Backend: `mvnw verify` (H2, 50 test) + GHCR image. Frontend: `ng build` + nginx image. İlk kurulumda 4 CI fix gerekti — test izolasyonu (`AbstractDataCleanupIT`, paylaşılan H2 FK ihlali) + frontend `npm ci || npm install` fallback (workflow + Dockerfile). Bundan sonra her push sonrası CI `gh run watch` ile teyit edilir (CLAUDE.md kuralı).
 

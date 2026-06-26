@@ -26,10 +26,15 @@ import jakarta.persistence.Version;
  * Fatura dosyası metadata + path. invoice → files 1:N (pdf/xml/statement).
  * Tablo adı `files`. Sadece createdAt taşır (updatedAt yok) — bu yüzden BaseEntity'den türemez.
  *
- * <p>{@code uq_files_invoice_sha256} (E2-DR-1): {@code (invoice_id, sha256)} bileşik tekil
- * kısıt — Postgres'te V15 KISMİ tekil index ({@code WHERE sha256 IS NOT NULL}) ile, H2/çoğu
- * DB'de ise birden çok NULL'ı çakışma SAYMAMA davranışıyla aynı niyeti taşır; böylece test
- * (H2, ddl-auto=create-drop) şeması da fatura-içi-dedup yarışını DB düzeyinde kapatır.
+ * <p><b>uq_files_invoice_sha256 — KISMİ tekil index semantiği (E2-DR-1).</b> Postgres'te
+ * (V15) bu, {@code WHERE sha256 IS NOT NULL} koşullu KISMİ bir unique index'tir: yani
+ * {@code sha256} NULL olan satırlar DB düzeyinde tekilleştirilMEZ (null-sha kayıtlar
+ * birbirini çakışma saymaz) — null-sha içerik-dedup'ı UYGULAMA katmanı yapar
+ * ({@code InvoiceFileImportService}). Aşağıdaki {@code @UniqueConstraint} annotation'ı yalnızca
+ * H2 TEST şemasını (ddl-auto=create-drop) sürer ve Postgres kısmi index'inin bir ÜST KÜMESİdir
+ * (H2 unique index'i birden çok NULL'a izin verdiğinden pratikte null-sha satırları yine
+ * çakışmaz; dolu sha için davranış birebir aynıdır). İki ortam da fatura-içi-dedup yarışını
+ * dolu-sha için DB düzeyinde kapatır.
  * Tekillik artık FATURA başınadır: AYNI faturada aynı içerik (sha256) iki kez bulunamaz, ama
  * AYNI içerik FARKLI faturalara birer satırla bağlanabilir (byte-aynı dosya iki meşru faturaya
  * ait olabilir; fizik dosya bir kez saklanır, ikinci satır aynı path'i paylaşır). Dolu sha256

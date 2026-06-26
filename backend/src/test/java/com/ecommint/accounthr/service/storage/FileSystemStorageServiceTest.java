@@ -123,6 +123,40 @@ class FileSystemStorageServiceTest {
         return invoiceRepository.save(invoice);
     }
 
+    /**
+     * Belirli bir (year, month) period'una bağlı yeni invoice — paylaşımlı-path testlerinde
+     * iki AYRI fatura (distinct period) gerekir ki {@code uq_periods_year_month} çakışmasın.
+     */
+    private Invoice newInvoiceInPeriod(Provider provider, int year, int month) {
+        Service service = new Service();
+        service.setName("Shared Svc " + System.nanoTime());
+        service.setProvider(provider);
+        service.setFrequency(Frequency.MONTHLY);
+        service.setActiveState(ActiveState.YES);
+        service = serviceRepository.save(service);
+
+        Period period = new Period();
+        period.setYear(year);
+        period.setMonth(month);
+        period.setCode(year + "-" + month + "-" + System.nanoTime());
+        period = periodRepository.save(period);
+
+        Expense expense = new Expense();
+        expense.setService(service);
+        expense.setPeriod(period);
+        expense.setTransactionDate(LocalDate.of(year, month, 1));
+        expense.setAmount(new BigDecimal("20.00"));
+        expense.setCurrency(Currency.USD);
+        expense = expenseRepository.save(expense);
+
+        Invoice invoice = new Invoice();
+        invoice.setExpense(expense);
+        invoice.setProvider(provider);
+        invoice.setStatus(InvoiceStatus.FOUND);
+        invoice.setInvoiceDate(LocalDate.of(year, month, 1));
+        return invoiceRepository.save(invoice);
+    }
+
     private Provider newProvider(String name) {
         Provider p = new Provider();
         p.setName(name);
@@ -262,6 +296,89 @@ class FileSystemStorageServiceTest {
         assertThat(reloaded.getFilePath()).startsWith("waiting/");
         assertThat(Files.exists(original)).isFalse();
         assertThat(Files.exists(storageRoot.resolve(reloaded.getFilePath()))).isTrue();
+    }
+
+    /**
+     * E2-DR-1: İki FileAsset AYNI file_path'i paylaşıyorsa (içerik-paylaşımlı dosya), birini
+     * trash'e taşımak fizik dosyayı TAŞIMAK yerine KOPYALAR; orijinal dosya kardeş satır için
+     * yerinde kalır → kardeşin referansı geçerli kalır.
+     */
+    @Test
+    void moveToTrash_sharedPath_copiesAndKeepsSiblingReferenceValid() {
+        Provider provider = newProvider("Shared Trash Provider");
+        Invoice invoiceA = newInvoiceInPeriod(provider, 2026, 1);
+        Invoice invoiceB = newInvoiceInPeriod(provider, 2026, 2);
+
+        StoredFile stored = storageService.store(
+                invoiceA.getId(), LocalDate.of(2026, 3, 12), "Shared Service",
+                null, null, "s.pdf",
+                new ByteArrayInputStream("shared-bytes".getBytes(StandardCharsets.UTF_8)), FileType.PDF);
+
+        // İki satır AYNI file_path'i paylaşır (içerik-paylaşımlı, byte-aynı dosya iki faturaya bağlı).
+        FileAsset assetA = persistAsset(invoiceA, stored, FileType.PDF);
+        FileAsset assetB = persistAsset(invoiceB, stored, FileType.PDF);
+        Path original = storageRoot.resolve(stored.relativePath());
+        assertThat(Files.exists(original)).isTrue();
+
+        storageService.moveToTrash(assetA.getId());
+
+        FileAsset reloadedA = fileAssetRepository.findById(assetA.getId()).orElseThrow();
+        FileAsset reloadedB = fileAssetRepository.findById(assetB.getId()).orElseThrow();
+
+        // A trash'e gitti; B değişmedi ve B'nin fizik dosyası HÂLÂ yerinde (taşınmadı, kopyalandı).
+        assertThat(reloadedA.getFilePath()).startsWith("trash/");
+        assertThat(reloadedB.getFilePath()).isEqualTo(stored.relativePath());
+        assertThat(Files.exists(original)).isTrue(); // kardeş için yerinde
+        assertThat(Files.exists(storageRoot.resolve(reloadedA.getFilePath()))).isTrue(); // kopya da var
+    }
+
+    /**
+     * E2-DR-1: Bir path BAŞKA bir FileAsset satırı tarafından da referans veriliyorsa
+     * {@code deletePhysical} fizik dosyayı SİLMEZ (kardeş satırın referansını korur) ve false döner.
+     */
+    @Test
+    void deletePhysical_sharedPath_skipsDeletionForSibling() {
+        Provider provider = newProvider("Shared Delete Provider");
+        Invoice invoiceA = newInvoiceInPeriod(provider, 2026, 4);
+        Invoice invoiceB = newInvoiceInPeriod(provider, 2026, 5);
+
+        StoredFile stored = storageService.store(
+                invoiceA.getId(), LocalDate.of(2026, 3, 13), "Shared Delete Service",
+                null, null, "d.pdf",
+                new ByteArrayInputStream("shared-delete-bytes".getBytes(StandardCharsets.UTF_8)),
+                FileType.PDF);
+        persistAsset(invoiceA, stored, FileType.PDF);
+        persistAsset(invoiceB, stored, FileType.PDF);
+        Path physical = storageRoot.resolve(stored.relativePath());
+        assertThat(Files.exists(physical)).isTrue();
+
+        // İki satır referans veriyor → fizik silme ATLANIR, dosya kalır.
+        boolean deleted = storageService.deletePhysical(stored.relativePath());
+        assertThat(deleted).isFalse();
+        assertThat(Files.exists(physical)).isTrue();
+    }
+
+    /**
+     * E2-DR-1: Yalnızca BİR satır (ya da hiç) referans veriyorsa {@code deletePhysical}
+     * mevcut davranışı korur — fiziksel dosyayı siler (rollback-cleanup yolu).
+     */
+    @Test
+    void deletePhysical_singleReference_deletesFile() {
+        Provider provider = newProvider("Solo Delete Provider");
+        Invoice invoice = newInvoice(provider, null);
+
+        StoredFile stored = storageService.store(
+                invoice.getId(), LocalDate.of(2026, 3, 14), "Solo Delete Service",
+                null, null, "d.pdf",
+                new ByteArrayInputStream("solo-delete-bytes".getBytes(StandardCharsets.UTF_8)),
+                FileType.PDF);
+        persistAsset(invoice, stored, FileType.PDF);
+        Path physical = storageRoot.resolve(stored.relativePath());
+        assertThat(Files.exists(physical)).isTrue();
+
+        boolean deleted = storageService.deletePhysical(stored.relativePath());
+        assertThat(deleted).isTrue();
+        assertThat(Files.exists(physical)).isFalse();
     }
 
     @Test

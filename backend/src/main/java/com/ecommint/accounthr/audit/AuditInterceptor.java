@@ -6,6 +6,8 @@ import org.hibernate.Interceptor;
 import org.hibernate.Transaction;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.type.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.ecommint.accounthr.domain.FileAsset;
 import com.ecommint.accounthr.domain.Invoice;
@@ -44,6 +46,8 @@ import com.ecommint.accounthr.domain.enums.AuditAction;
  * denetlemez; ek güvenlik olarak alan adı bazlı filtre de uygulanır.
  */
 public class AuditInterceptor implements Interceptor {
+
+    private static final Logger log = LoggerFactory.getLogger(AuditInterceptor.class);
 
     /** Denetlenen entity'lerin basit (simple) adları → audit_log.entity_type. */
     private static final Set<String> AUDITED_TYPES =
@@ -158,7 +162,17 @@ public class AuditInterceptor implements Interceptor {
         }
         AuditFlusher flusher = AuditFlusherHolder.get();
         if (flusher != null) {
-            flusher.flush();
+            // Audit YAZIMI asıl işlemi ASLA bozmamalı: beforeTransactionCompletion içinden
+            // exception fırlatmak Hibernate'te TANIMSIZ davranıştır (commit eden iş
+            // transaction'ını abort/corrupt edebilir). Bu yüzden flush hatasını ERROR olarak
+            // (traceId/correlationId MDC'de) logla ve YUT — yeniden fırlatma. Audit kaybı
+            // kabul edilebilir; iş verisinin bütünlüğü kabul edilemez.
+            try {
+                flusher.flush();
+            } catch (RuntimeException e) {
+                log.error("Audit flush başarısız — iş transaction'ı korunuyor (yutuldu): {}",
+                        e.getMessage(), e);
+            }
         } else {
             // Flusher hazır değilse tamponu boşalt (sızıntı olmasın); yalnızca context
             // boot olmadan teorik olarak mümkündür.

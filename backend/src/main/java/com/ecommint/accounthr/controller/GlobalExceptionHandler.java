@@ -9,13 +9,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.drive.DriveSyncException;
 import com.ecommint.accounthr.service.drive.DriveSyncValidationException;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
@@ -79,6 +82,20 @@ public class GlobalExceptionHandler {
                 "Validation failed for one or more fields.", request, fieldErrors);
     }
 
+    /**
+     * Geçersiz enum/tip query parametresi (ör. {@code ?active=GARBAGE} veya
+     * {@code ?frequency=GARBAGE}) → 400 VALIDATION_ERROR. Spring bunu
+     * {@link MethodArgumentTypeMismatchException} olarak fırlatır; yakalanmazsa
+     * genel handler bunu yanıltıcı bir 500'e çevirirdi (E3-02 düzeltmesi).
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        String value = ex.getValue() != null ? ex.getValue().toString() : "null";
+        String message = "Geçersiz değer '" + value + "' — parametre '" + ex.getName() + "'";
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request, null);
+    }
+
     @ExceptionHandler({ BadCredentialsException.class, AuthenticationException.class })
     public ResponseEntity<ErrorResponse> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED",
@@ -100,6 +117,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateFileException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateFile(DuplicateFileException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_FILE", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Veritabanı bütünlük ihlali (ör. eşzamanlı aynı-isim sağlayıcı oluşturma →
+     * unique-constraint çakışması) → 409 CONFLICT backstop. Asıl düzeltme servis
+     * katmanındaki idempotent resolve-or-create'tir (saveAndFlush + re-query);
+     * bu handler yine de bütünlük hatalarının 500'e düşmesini engeller (E3-02).
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION",
+                "The request conflicts with the current state of a resource.", request, null);
     }
 
     /** Path traversal / kök dışı yol → 400 BAD_REQUEST. */
@@ -168,6 +198,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested resource was not found.", request, null);
+    }
+
+    /** İstenen kaynak (ör. id ile servis) bulunamadı → 404 NOT_FOUND. */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(
+            ResourceNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request, null);
+    }
+
+    /**
+     * Var olan bir yola desteklenmeyen HTTP metoduyla istek (ör. {@code DELETE
+     * /api/v1/services/{id}} — sert silme bilinçli olarak yoktur) → 405. Aksi halde
+     * genel handler bunu yanıltıcı bir 500'e çevirirdi.
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
+                "HTTP method not supported for this resource.", request, null);
     }
 
     /** Son güvenlik ağı: beklenmeyen hatalar → 500. Stack trace / sır SIZDIRMAZ. */

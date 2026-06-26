@@ -278,6 +278,46 @@ class ServiceMasterImportIT extends AbstractDataCleanupIT {
                 .containsExactly("Orphan Service");
     }
 
+    /**
+     * E1-DR-3: Yaklaşık Tutar NUMERIC hücresindeki FP gürültüsü (1234.567) parse'ta
+     * scale-2 HALF_UP'a yuvarlanır (1234.57) → NUMERIC(15,2) ile temiz hizalama.
+     */
+    @Test
+    void approxAmountIsRoundedToScale2HalfUp() {
+        ServiceImportSummary summary = importService.importServicesSheet(
+                new ByteArrayInputStream(buildScaleServisler()));
+        assertThat(summary.rowsRead()).isEqualTo(1);
+
+        com.ecommint.accounthr.domain.Service s = findService("Datadog");
+        assertThat(s.getApproxAmountTry()).isEqualByComparingTo(new BigDecimal("1234.57"));
+        assertThat(s.getApproxAmountTry().scale()).isEqualTo(2);
+    }
+
+    private byte[] buildScaleServisler() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Servisler");
+            Row header = sheet.createRow(0);
+            String[] headers = {"Hizmet", "Sağlayıcı", "Kart", "Frekans", "Aktif",
+                    "Aktif Aylar", "Yaklaşık Tutar (TL)", "Fatura E-posta",
+                    "Fatura Kaynağı", "Notlar"};
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("Datadog");
+            r1.createCell(1).setCellValue("Datadog Inc");
+            r1.createCell(3).setCellValue("Aylık");
+            r1.createCell(4).setCellValue("Evet");
+            r1.createCell(6).setCellValue(1234.567); // → 1234.57
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Test
     void reRunIsIdempotent() {
         byte[] wb = buildServisler();

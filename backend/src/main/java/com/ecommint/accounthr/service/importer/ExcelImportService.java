@@ -3,6 +3,7 @@ package com.ecommint.accounthr.service.importer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -29,6 +30,7 @@ import com.ecommint.accounthr.domain.Expense;
 import com.ecommint.accounthr.domain.Invoice;
 import com.ecommint.accounthr.domain.Period;
 import com.ecommint.accounthr.domain.Provider;
+import com.ecommint.accounthr.domain.Team;
 import com.ecommint.accounthr.domain.enums.ActiveState;
 import com.ecommint.accounthr.domain.enums.Currency;
 import com.ecommint.accounthr.domain.enums.Frequency;
@@ -40,6 +42,7 @@ import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ProviderRepository;
 import com.ecommint.accounthr.repository.ServiceRepository;
+import com.ecommint.accounthr.repository.TeamRepository;
 
 /**
  * E2-01 — {@code 2026_Harcamalar.xlsx} ay-sheet'lerini {@code expenses} (+ taslak
@@ -74,7 +77,7 @@ public class ExcelImportService {
     private static final int COL_CURRENCY = 4;       // Para Birimi
     private static final int COL_AMOUNT_TRY = 5;     // TL Karşılığı
     private static final int COL_CARD = 6;           // Kart
-    private static final int COL_TEAM = 7;           // Kullanan Takım (importer'da kullanılmaz)
+    private static final int COL_TEAM = 7;           // Kullanan Takım (E3-06-DR-1: Team'e map'lenir)
     private static final int COL_PURPOSE = 8;        // Amaç
     private static final int COL_ACC_EMAIL = 9;      // Muhasebe E-posta (importer'da kullanılmaz)
     private static final int COL_STATUS = 10;        // Fatura Durumu
@@ -88,19 +91,22 @@ public class ExcelImportService {
     private final PeriodRepository periodRepository;
     private final ExpenseRepository expenseRepository;
     private final InvoiceRepository invoiceRepository;
+    private final TeamRepository teamRepository;
 
     public ExcelImportService(ProviderRepository providerRepository,
                               ServiceRepository serviceRepository,
                               CardRepository cardRepository,
                               PeriodRepository periodRepository,
                               ExpenseRepository expenseRepository,
-                              InvoiceRepository invoiceRepository) {
+                              InvoiceRepository invoiceRepository,
+                              TeamRepository teamRepository) {
         this.providerRepository = providerRepository;
         this.serviceRepository = serviceRepository;
         this.cardRepository = cardRepository;
         this.periodRepository = periodRepository;
         this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
+        this.teamRepository = teamRepository;
     }
 
     /**
@@ -113,6 +119,9 @@ public class ExcelImportService {
         // DataFormatter POI'de thread-safe değil; eşzamanlı import'larda paylaşılan
         // örnek parsing'i bozabilir. Bu yüzden her çağrı için lokal örnek kullanılır.
         DataFormatter dataFormatter = new DataFormatter();
+        // E3-06-DR-1: run-içi Team cache (normalize-lowercase isim → Team). Aynı import'ta
+        // aynı takım iki kez insert edilmesin (Provider cache pattern'iyle aynı mantık).
+        Map<String, Team> teamCache = new HashMap<>();
         try (Workbook workbook = new XSSFWorkbook(xlsx)) {
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
                 Sheet sheet = workbook.getSheetAt(i);
@@ -124,7 +133,7 @@ public class ExcelImportService {
                     continue;
                 }
                 ImportSummary.SheetSummary sheetSummary =
-                        importSheet(sheet, sheetName, periodCode, dataFormatter);
+                        importSheet(sheet, sheetName, periodCode, dataFormatter, teamCache);
                 summary.addSheet(sheetSummary);
             }
         } catch (IOException e) {
@@ -134,7 +143,8 @@ public class ExcelImportService {
     }
 
     private ImportSummary.SheetSummary importSheet(Sheet sheet, String sheetName, String periodCode,
-                                                   DataFormatter dataFormatter) {
+                                                   DataFormatter dataFormatter,
+                                                   Map<String, Team> teamCache) {
         ImportSummary.SheetSummary sheetSummary = new ImportSummary.SheetSummary(sheetName, periodCode);
         Period period = resolveOrCreatePeriod(periodCode);
 
@@ -176,7 +186,7 @@ public class ExcelImportService {
 
             sheetSummary.incrementRowsRead();
             importDataRow(row, r, period, periodCode, informational, sheetSummary, dataFormatter,
-                    businessKeyOccurrences);
+                    businessKeyOccurrences, teamCache);
         }
 
         return sheetSummary;
@@ -185,7 +195,8 @@ public class ExcelImportService {
     private void importDataRow(Row row, int rowIndex, Period period, String periodCode,
                                boolean informational, ImportSummary.SheetSummary sheetSummary,
                                DataFormatter dataFormatter,
-                               Map<String, Integer> businessKeyOccurrences) {
+                               Map<String, Integer> businessKeyOccurrences,
+                               Map<String, Team> teamCache) {
         String serviceName = normalize(getString(row, COL_SERVICE, dataFormatter));
         String providerName = normalize(getString(row, COL_PROVIDER, dataFormatter));
         if (serviceName.isEmpty()) {
@@ -201,6 +212,7 @@ public class ExcelImportService {
         BigDecimal amountTry = getDecimal(row, COL_AMOUNT_TRY, dataFormatter);
         String cardLast4 = parseCardLast4(getString(row, COL_CARD, dataFormatter));
         String purpose = blankToNull(getString(row, COL_PURPOSE, dataFormatter));
+        String teamName = normalize(getString(row, COL_TEAM, dataFormatter));
         InvoiceStatus status = parseStatus(getString(row, COL_STATUS, dataFormatter));
         String invoiceNote = blankToNull(getString(row, COL_NOTE, dataFormatter));
 
@@ -227,6 +239,9 @@ public class ExcelImportService {
         com.ecommint.accounthr.domain.Service service =
                 resolveOrCreateService(serviceName, providerName, card, informational);
 
+        // E3-06-DR-1: "Kullanan Takım" doluysa Team'i çöz/oluştur (run-cache), boşsa null.
+        Team team = resolveOrCreateTeam(teamName, teamCache);
+
         Expense expense = new Expense();
         expense.setService(service);
         expense.setPeriod(period);
@@ -237,6 +252,7 @@ public class ExcelImportService {
         expense.setAmountTry(amountTry);
         expense.setInformational(informational);
         expense.setPurpose(purpose);
+        expense.setUsingTeam(team);
         expense.setSourceRowHash(hash);
         expense = expenseRepository.save(expense);
 
@@ -348,6 +364,31 @@ public class ExcelImportService {
     }
 
     /**
+     * E3-06-DR-1: "Kullanan Takım" hücresini Team'e çözer. Boş/null → null (takım set
+     * edilmez). Provider resolver pattern'ini birebir izler: isim normalize edilir, run-içi
+     * cache (normalize-lowercase isim → Team) çift insert'i önler; cache'te yoksa DB'den
+     * büyük/küçük harf duyarsız aranır, o da yoksa oluşturulur. Takım satır-hash'ine GİRMEZ.
+     */
+    private Team resolveOrCreateTeam(String name, Map<String, Team> teamCache) {
+        String teamName = normalize(name);
+        if (teamName.isEmpty()) {
+            return null;
+        }
+        String key = teamName.toLowerCase(java.util.Locale.ROOT);
+        Team cached = teamCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        Team team = teamRepository.findByNameIgnoreCase(teamName).orElseGet(() -> {
+            Team t = new Team();
+            t.setName(teamName);
+            return teamRepository.save(t);
+        });
+        teamCache.put(key, team);
+        return team;
+    }
+
+    /**
      * Servisi (sağlayıcı + normalize isim) ile bulur; yoksa minimal oluşturur.
      * Eşleşme normalize-isim üzerinden büyük/küçük harf duyarsızdır. E2-02 zenginleştirir.
      */
@@ -430,7 +471,10 @@ public class ExcelImportService {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
-            return BigDecimal.valueOf(cell.getNumericCellValue());
+            // E1-DR-3: double yolu FP gürültüsü taşıyabilir; NUMERIC(15,2) ile hizalamak
+            // için scale-2 HALF_UP'a yuvarla. Hash de scale-2 değer üzerinden hesaplanır
+            // → re-import idempotent kalır (parent yeniden seed eder, temiz değer baseline).
+            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, RoundingMode.HALF_UP);
         }
         String raw = getString(row, col, dataFormatter).trim();
         if (raw.isEmpty()) {
@@ -445,7 +489,8 @@ public class ExcelImportService {
             cleaned = cleaned.replace(",", ".");
         }
         try {
-            return new BigDecimal(cleaned);
+            // Metin yolunda da NUMERIC(15,2) ile tutarlı scale-2 HALF_UP.
+            return new BigDecimal(cleaned).setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
             log.warn("Tutar parse edilemedi: '{}'", raw);
             return null;

@@ -3,6 +3,7 @@ package com.ecommint.accounthr.service.importer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -512,7 +513,9 @@ public class ServiceMasterImportService {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
-            return BigDecimal.valueOf(cell.getNumericCellValue());
+            // E1-DR-3: double yolu FP gürültüsü taşıyabilir; NUMERIC(15,2) ile hizalamak
+            // için scale-2 HALF_UP'a yuvarla.
+            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, RoundingMode.HALF_UP);
         }
         String raw = getString(row, col, dataFormatter).trim();
         if (raw.isEmpty()) {
@@ -531,7 +534,8 @@ public class ServiceMasterImportService {
             cleaned = cleaned.replace(".", "");
         }
         try {
-            return new BigDecimal(cleaned);
+            // Metin yolunda da NUMERIC(15,2) ile tutarlı scale-2 HALF_UP.
+            return new BigDecimal(cleaned).setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
             log.warn("Yaklaşık tutar parse edilemedi: '{}'", raw);
             return null;

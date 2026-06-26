@@ -26,6 +26,7 @@ import com.ecommint.accounthr.config.JpaAuditingConfig;
 import com.ecommint.accounthr.domain.Card;
 import com.ecommint.accounthr.domain.Expense;
 import com.ecommint.accounthr.domain.Invoice;
+import com.ecommint.accounthr.domain.Team;
 import com.ecommint.accounthr.domain.enums.Currency;
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 import com.ecommint.accounthr.dto.importer.ImportSummary;
@@ -35,6 +36,7 @@ import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ProviderRepository;
 import com.ecommint.accounthr.repository.ServiceRepository;
+import com.ecommint.accounthr.repository.TeamRepository;
 
 import jakarta.persistence.EntityManager;
 
@@ -57,6 +59,7 @@ class ExcelImportServiceTest {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ProviderRepository providerRepository;
     @Autowired private PeriodRepository periodRepository;
+    @Autowired private TeamRepository teamRepository;
     @Autowired private EntityManager entityManager;
 
     @BeforeEach
@@ -516,5 +519,175 @@ class ExcelImportServiceTest {
                 .filter(e -> serviceName.equals(e.getService().getName()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Expense bulunamadı: " + serviceName));
+    }
+
+    // ---------------------------------------------------------------------------
+    // E3-06-DR-1 — "Kullanan Takım" → Team
+    // ---------------------------------------------------------------------------
+
+    /**
+     * "Mart" sheet'i: COL_TEAM (index 7) dolu/boş kombinasyonları.
+     * row1: takım "Backend"
+     * row2: takım "Backend" (aynı isim → ikinci satır YENİ Team açmamalı; run-cache)
+     * row3: takım "frontend" (farklı isim, küçük harf — ayrı Team)
+     * row4: takım BOŞ → usingTeam null
+     */
+    private byte[] buildTeamSheet() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(1).setCellValue("Claude AI");
+            r1.createCell(2).setCellValue("Anthropic");
+            r1.createCell(3).setCellValue(20.0);
+            r1.createCell(4).setCellValue("USD");
+            r1.createCell(5).setCellValue(700.0);
+            r1.createCell(6).setCellValue("****3909");
+            r1.createCell(7).setCellValue("Backend");
+            r1.createCell(10).setCellValue("Bulundu");
+
+            Row r2 = sheet.createRow(2);
+            r2.createCell(1).setCellValue("AWS");
+            r2.createCell(2).setCellValue("Amazon");
+            r2.createCell(3).setCellValue(10.0);
+            r2.createCell(4).setCellValue("USD");
+            r2.createCell(5).setCellValue(350.0);
+            r2.createCell(6).setCellValue("****3800");
+            r2.createCell(7).setCellValue("Backend"); // aynı takım → tek Team
+            r2.createCell(10).setCellValue("Bekleniyor");
+
+            Row r3 = sheet.createRow(3);
+            r3.createCell(1).setCellValue("Vercel");
+            r3.createCell(2).setCellValue("Vercel Inc");
+            r3.createCell(3).setCellValue(15.0);
+            r3.createCell(4).setCellValue("USD");
+            r3.createCell(5).setCellValue(500.0);
+            r3.createCell(6).setCellValue("****3800");
+            r3.createCell(7).setCellValue("frontend");
+            r3.createCell(10).setCellValue("Bulundu");
+
+            Row r4 = sheet.createRow(4);
+            r4.createCell(1).setCellValue("Twilio");
+            r4.createCell(2).setCellValue("Twilio Inc");
+            r4.createCell(3).setCellValue(9.99);
+            r4.createCell(4).setCellValue("USD");
+            r4.createCell(5).setCellValue(330.0);
+            r4.createCell(6).setCellValue("****3909");
+            // COL_TEAM (7) boş → usingTeam null
+            r4.createCell(10).setCellValue("Bulundu");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    void teamColumnCreatesTeamsLinksExpensesAndDedupesWithinRun() {
+        ImportSummary summary = importService.importMonthlySheets(
+                new ByteArrayInputStream(buildTeamSheet()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(summary.getTotalImported()).isEqualTo(4);
+
+        // İki distinct takım: "Backend" + "frontend" (aynı isimli iki satır TEK Team).
+        List<Team> teams = teamRepository.findAll();
+        assertThat(teams).extracting(Team::getName)
+                .containsExactlyInAnyOrder("Backend", "frontend");
+
+        List<Expense> expenses = expenseRepository.findAll();
+
+        Expense claude = findByService(expenses, "Claude AI");
+        assertThat(claude.getUsingTeam()).isNotNull();
+        assertThat(claude.getUsingTeam().getName()).isEqualTo("Backend");
+
+        Expense aws = findByService(expenses, "AWS");
+        assertThat(aws.getUsingTeam()).isNotNull();
+        // Aynı Team örneğine bağlı (çift insert yok).
+        assertThat(aws.getUsingTeam().getId()).isEqualTo(claude.getUsingTeam().getId());
+
+        Expense vercel = findByService(expenses, "Vercel");
+        assertThat(vercel.getUsingTeam().getName()).isEqualTo("frontend");
+
+        // Boş takım → null.
+        Expense twilio = findByService(expenses, "Twilio");
+        assertThat(twilio.getUsingTeam()).isNull();
+    }
+
+    @Test
+    void teamReimportDoesNotDuplicateTeams() {
+        byte[] wb = buildTeamSheet();
+        importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(teamRepository.findAll()).hasSize(2);
+
+        // Re-import: satırlar duplicate (0 yeni expense), takımlar da çiftlenmemeli
+        // (DB find-or-create büyük/küçük harf duyarsız).
+        ImportSummary second = importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(second.getTotalImported()).isEqualTo(0);
+        assertThat(teamRepository.findAll()).hasSize(2);
+    }
+
+    // ---------------------------------------------------------------------------
+    // E1-DR-3 — money setScale(2, HALF_UP)
+    // ---------------------------------------------------------------------------
+
+    /**
+     * NUMERIC hücredeki FP-gürültülü değer (123456.789) parse'ta scale-2 HALF_UP'a
+     * yuvarlanır (123456.79). Re-import yine 0 yeni (hash scale-2 değer üzerinden stabil).
+     */
+    @Test
+    void numericAmountIsRoundedToScale2HalfUp() {
+        byte[] wb = buildScaleSheet();
+
+        ImportSummary first = importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(first.getTotalImported()).isEqualTo(1);
+
+        List<Expense> expenses = expenseRepository.findAll();
+        assertThat(expenses).hasSize(1);
+        Expense e = expenses.get(0);
+        assertThat(e.getAmount()).isEqualByComparingTo(new BigDecimal("123456.79"));
+        assertThat(e.getAmount().scale()).isEqualTo(2);
+        assertThat(e.getAmountTry()).isEqualByComparingTo(new BigDecimal("987654.32"));
+        assertThat(e.getAmountTry().scale()).isEqualTo(2);
+
+        // Idempotency: aynı dosya tekrar → 0 yeni (scaled değer üzerinden hash stabil).
+        ImportSummary second = importService.importMonthlySheets(new ByteArrayInputStream(wb));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(second.getTotalImported()).isEqualTo(0);
+        assertThat(expenseRepository.findAll()).hasSize(1);
+    }
+
+    /** "Mart" sheet'i: tek satır, FP-gürültülü tutarlar (HALF_UP test için). */
+    private byte[] buildScaleSheet() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(1).setCellValue("Datadog");
+            r1.createCell(2).setCellValue("Datadog Inc");
+            r1.createCell(3).setCellValue(123456.789);  // → 123456.79
+            r1.createCell(4).setCellValue("USD");
+            r1.createCell(5).setCellValue(987654.321);   // → 987654.32
+            r1.createCell(6).setCellValue("****3800");
+            r1.createCell(10).setCellValue("Bulundu");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

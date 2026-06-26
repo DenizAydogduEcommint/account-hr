@@ -3,6 +3,7 @@ package com.ecommint.accounthr.service.importer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -485,7 +486,9 @@ public class ReconciliationService {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
-            return BigDecimal.valueOf(cell.getNumericCellValue());
+            // E1-DR-3: TOPLAM okuması da scale-2 HALF_UP → DB (NUMERIC(15,2)) ile aynı
+            // ölçekte karşılaştırılır; ±0.01 toleransı korunur.
+            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, RoundingMode.HALF_UP);
         }
         String raw = cellText(row, col, dataFormatter).trim();
         if (raw.isEmpty()) {
@@ -498,7 +501,7 @@ public class ReconciliationService {
             cleaned = cleaned.replace(",", ".");
         }
         try {
-            return new BigDecimal(cleaned);
+            return new BigDecimal(cleaned).setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
             log.warn("TOPLAM tutarı parse edilemedi: '{}'", raw);
             return null;

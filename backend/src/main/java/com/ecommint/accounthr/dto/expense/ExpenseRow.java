@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.ecommint.accounthr.domain.enums.Currency;
+import com.ecommint.accounthr.domain.enums.ExpenseSource;
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -68,5 +69,10 @@ public record ExpenseRow(
 
         @Schema(description = "Fatura notu (dosya path'i ve/veya açıklama). Yoksa null.",
                 example = "faturalar/2026-03/claude_mart.pdf", nullable = true)
-        String invoiceNote) {
+        String invoiceNote,
+
+        @Schema(description = "Satırın kaynağı: STATEMENT (ekstre/importer) veya MANUAL "
+                + "(elle girilen satır, E3-06). Eski satırlarda STATEMENT.",
+                example = "MANUAL")
+        ExpenseSource source) {
 }

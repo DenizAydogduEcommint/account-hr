@@ -143,6 +143,7 @@ public class ServiceQueryService {
                 provider != null ? provider.getName() : null,
                 card != null ? card.getLastFour() : null,
                 team != null ? team.getName() : null,
+                team != null ? team.getId() : null,
                 s.getFrequency(),
                 s.getActiveState(),
                 s.getActiveMonths(),

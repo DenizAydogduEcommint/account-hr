@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.ecommint.accounthr.domain.enums.Currency;
+import com.ecommint.accounthr.domain.enums.ExpenseSource;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -76,6 +77,15 @@ public class Expense extends BaseEntity {
      */
     @Column(name = "source_row_hash", length = 64)
     private String sourceRowHash;
+
+    /**
+     * Satırın kaynağı (E3-06): {@code STATEMENT} (ekstre/Excel importer) veya {@code MANUAL}
+     * (kullanıcının elle girdiği satır). Varsayılan {@code STATEMENT} — mevcut/importer
+     * satırları bu değerdedir; elle giriş açıkça {@code MANUAL} set eder.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false)
+    private ExpenseSource source = ExpenseSource.STATEMENT;
 
     public Service getService() {
         return service;
@@ -163,5 +173,13 @@ public class Expense extends BaseEntity {
 
     public void setSourceRowHash(String sourceRowHash) {
         this.sourceRowHash = sourceRowHash;
+    }
+
+    public ExpenseSource getSource() {
+        return source;
+    }
+
+    public void setSource(ExpenseSource source) {
+        this.source = source;
     }
 }

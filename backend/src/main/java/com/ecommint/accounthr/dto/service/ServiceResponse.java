@@ -29,6 +29,9 @@ public record ServiceResponse(
         String cardLast4,
         @Schema(description = "Servisi kullanan takım adı", example = "Engineering", nullable = true)
         String usingTeamName,
+        @Schema(description = "Servisi kullanan takımın id'si (takım seçicide ön-seçim için)",
+                example = "3", nullable = true)
+        Long usingTeamId,
         @Schema(example = "MONTHLY") Frequency frequency,
         @Schema(example = "YES") ActiveState activeState,
         @Schema(description = "Servisin görüldüğü/beklendiği aylar (virgüllü, ör. \"2026-01, 2026-02\")",

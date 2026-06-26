@@ -20,6 +20,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.InvalidExpenseRequestException;
 import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.drive.DriveSyncException;
 import com.ecommint.accounthr.service.drive.DriveSyncValidationException;
@@ -243,6 +244,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested resource was not found.", request, null);
+    }
+
+    /**
+     * Elle harcama satırı (E3-06) isteğinde veri-bağımlı geçersizlik (bilinmeyen
+     * {@code cardLast4} / {@code usingTeamId}) → 400 VALIDATION_ERROR. Alan-bazı (format/null)
+     * hatalar {@link MethodArgumentNotValidException} ile zaten aynı şekle eşlenir.
+     */
+    @ExceptionHandler(InvalidExpenseRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidExpenseRequest(
+            InvalidExpenseRequestException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request, null);
     }
 
     /** İstenen kaynak (ör. id ile servis) bulunamadı → 404 NOT_FOUND. */

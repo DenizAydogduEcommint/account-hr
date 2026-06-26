@@ -29,6 +29,7 @@ import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ServiceContactRepository;
 import com.ecommint.accounthr.service.importer.StatusColors;
+// ResourceNotFoundException is in the same package (com.ecommint.accounthr.service).
 
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -119,6 +120,26 @@ public class ExpenseQueryService {
 
         return new ExpenseListResponse(month, main, operationalTotalTry,
                 informationalRows, informationalTotalTry);
+    }
+
+    /**
+     * E3-06 — Tek bir expense'i (id ile) {@link ExpenseRow}'a eşler. Elle satır oluşturma
+     * sonrası, GET listesinin döndürdüğüyle BİREBİR aynı satırı yanıt olarak üretmek için
+     * kullanılır (frontend aynı bileşenle render eder). Temsilci invoice = en güncel
+     * (en yüksek id'li); yeni oluşturulan satırda bu tek EXPECTED invoice'tur. Açık bir
+     * okuma transaction'ı içinde çalışır; lazy ilişkiler bu sınır içinde çözülür.
+     *
+     * @throws ResourceNotFoundException expense yoksa (çağıran sözleşmesi: id geçerli olmalı)
+     */
+    @Transactional(readOnly = true)
+    public ExpenseRow buildRow(Long expenseId) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Harcama bulunamadı: id=" + expenseId));
+        List<Expense> one = List.of(expense);
+        Map<Long, Invoice> reps = representativeInvoices(one);
+        Map<Long, String> emails = primaryEmails(one);
+        return toRow(expense, reps.get(expense.getId()), emails);
     }
 
     /**
@@ -220,7 +241,8 @@ public class ExpenseQueryService {
                 accountingEmail,
                 invoiceStatus,
                 invoiceColorHex,
-                invoiceNote);
+                invoiceNote,
+                e.getSource());
     }
 
     /**

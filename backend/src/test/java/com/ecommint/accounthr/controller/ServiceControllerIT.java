@@ -21,6 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.ecommint.accounthr.AbstractDataCleanupIT;
 import com.ecommint.accounthr.domain.AppUser;
 import com.ecommint.accounthr.domain.Provider;
+import com.ecommint.accounthr.domain.Team;
 import com.ecommint.accounthr.domain.enums.ActiveState;
 import com.ecommint.accounthr.domain.enums.Frequency;
 import com.ecommint.accounthr.domain.enums.UserRole;
@@ -28,6 +29,7 @@ import com.ecommint.accounthr.repository.AppUserRepository;
 import com.ecommint.accounthr.repository.ProviderRepository;
 import com.ecommint.accounthr.repository.RefreshTokenRepository;
 import com.ecommint.accounthr.repository.ServiceRepository;
+import com.ecommint.accounthr.repository.TeamRepository;
 
 /**
  * E1-07 referans endpoint testi: {@code GET /api/v1/services}.
@@ -47,10 +49,12 @@ class ServiceControllerIT extends AbstractDataCleanupIT {
     @Autowired private AppUserRepository userRepository;
     @Autowired private ProviderRepository providerRepository;
     @Autowired private ServiceRepository serviceRepository;
+    @Autowired private TeamRepository teamRepository;
     @Autowired private RefreshTokenRepository refreshTokenRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     private String adminEmail;
+    private Long engineeringTeamId;
 
     @BeforeEach
     void seed() {
@@ -72,9 +76,16 @@ class ServiceControllerIT extends AbstractDataCleanupIT {
         anthropic.setName("Anthropic");
         providerRepository.save(anthropic);
 
+        Team engineering = new Team();
+        engineering.setName("Engineering");
+        teamRepository.save(engineering);
+        engineeringTeamId = engineering.getId();
+
+        // Takımı OLAN servis → usingTeamId = takımın id'si.
         com.ecommint.accounthr.domain.Service svc = new com.ecommint.accounthr.domain.Service();
         svc.setName("Claude AI");
         svc.setProvider(anthropic);
+        svc.setUsingTeam(engineering);
         svc.setFrequency(Frequency.MONTHLY);
         svc.setActiveState(ActiveState.YES);
         svc.setInformational(false);
@@ -116,8 +127,44 @@ class ServiceControllerIT extends AbstractDataCleanupIT {
         assertThat(dto.get("providerName")).isEqualTo("Anthropic");
         assertThat(dto.get("frequency")).isEqualTo("MONTHLY");
         assertThat(dto.get("activeState")).isEqualTo("YES");
+        // Takımı olan servis → usingTeamName + usingTeamId her ikisi de dolu.
+        assertThat(dto.get("usingTeamName")).isEqualTo("Engineering");
+        assertThat(((Number) dto.get("usingTeamId")).longValue()).isEqualTo(engineeringTeamId);
         // Entity sızmamalı: ilişkisel nesneler yerine düz alanlar
         assertThat(dto).doesNotContainKeys("provider", "defaultCard", "usingTeam");
+    }
+
+    // E3-06: takımı OLMAYAN servis → usingTeamId null döner (dropdown ön-seçimi yok).
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void serviceWithoutTeamHasNullUsingTeamId() {
+        Provider aws = new Provider();
+        aws.setName("Amazon");
+        providerRepository.save(aws);
+
+        com.ecommint.accounthr.domain.Service teamless = new com.ecommint.accounthr.domain.Service();
+        teamless.setName("AWS");
+        teamless.setProvider(aws);
+        teamless.setFrequency(Frequency.USAGE_BASED);
+        teamless.setActiveState(ActiveState.YES);
+        teamless.setInformational(false);
+        serviceRepository.save(teamless);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken());
+
+        ResponseEntity<Map> resp = rest.exchange(
+                "/api/v1/services?q=AWS&size=20",
+                HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) resp.getBody().get("content");
+        assertThat(content).hasSize(1);
+        Map<String, Object> dto = content.get(0);
+        assertThat(dto.get("name")).isEqualTo("AWS");
+        assertThat(dto).containsKey("usingTeamId"); // alan mevcut...
+        assertThat(dto.get("usingTeamId")).isNull(); // ...ama takım olmadığı için null
+        assertThat(dto.get("usingTeamName")).isNull();
     }
 
     // E1 review #3: ?size çok büyük olsa bile (allocation-DoS) Spring sayfa boyutunu

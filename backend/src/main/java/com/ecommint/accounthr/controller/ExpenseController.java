@@ -7,15 +7,24 @@ import java.time.format.DateTimeParseException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ecommint.accounthr.domain.enums.InvoiceStatus;
+import com.ecommint.accounthr.dto.expense.ExpenseCreateRequest;
 import com.ecommint.accounthr.dto.expense.ExpenseListResponse;
+import com.ecommint.accounthr.dto.expense.ExpenseRow;
+import com.ecommint.accounthr.service.ExpenseCommandService;
 import com.ecommint.accounthr.service.ExpenseQueryService;
+
+import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,9 +53,12 @@ public class ExpenseController {
     private static final DateTimeFormatter MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseQueryService expenseQueryService;
+    private final ExpenseCommandService expenseCommandService;
 
-    public ExpenseController(ExpenseQueryService expenseQueryService) {
+    public ExpenseController(ExpenseQueryService expenseQueryService,
+            ExpenseCommandService expenseCommandService) {
         this.expenseQueryService = expenseQueryService;
+        this.expenseCommandService = expenseCommandService;
     }
 
     /**
@@ -72,6 +84,30 @@ public class ExpenseController {
                     Pageable pageable) {
         String resolved = resolveMonth(month);
         return expenseQueryService.list(resolved, card, status, q, pageable);
+    }
+
+    /**
+     * E3-06 — Elle (manuel) bir harcama satırı oluşturur. Ekip üyeleri girebilir
+     * ({@code isAuthenticated()}, E3-05 fatura yükleme ile aynı yetki). Satır
+     * {@code source=MANUAL} ile işaretlenir ve durumu "Bekleniyor" (EXPECTED) olan bir
+     * taslak invoice ile gelir. Yanıt, GET listesindeki satırla BİREBİR aynı
+     * {@link ExpenseRow}'dur (201 Created).
+     *
+     * <p>Doğrulama: alan-bazı hatalar (null/format/pozitiflik) → 400 VALIDATION_ERROR;
+     * bilinmeyen {@code serviceId} → 404 NOT_FOUND; bilinmeyen {@code cardLast4}/
+     * {@code usingTeamId} → 400 VALIDATION_ERROR (hepsi {@code GlobalExceptionHandler}).
+     */
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+            summary = "Elle harcama satırı oluştur (E3-06)",
+            description = "Banka ekstresinden önce/olmadan tek bir harcama satırı girer "
+                    + "(servis-tabanlı). source=MANUAL, taslak invoice durumu EXPECTED "
+                    + "(Bekleniyor). Yanıt GET listesindeki satırla aynı ExpenseRow. "
+                    + "Kimlik doğrulama gerektirir.")
+    public ExpenseRow create(@Valid @RequestBody ExpenseCreateRequest request) {
+        return expenseCommandService.create(request);
     }
 
     /**

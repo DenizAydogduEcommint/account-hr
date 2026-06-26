@@ -73,7 +73,7 @@ public class FileSystemStorageService implements StorageService {
             Files.createDirectories(root.resolve(WAITING_DIR));
             Files.createDirectories(root.resolve(TRASH_DIR));
         } catch (IOException e) {
-            throw new StorageException("Storage kök dizinleri oluşturulamadı: " + root, e);
+            throw new StorageIOException("Storage kök dizinleri oluşturulamadı: " + root, e);
         }
         log.info("Fatura storage kökü hazır: {}", root);
     }
@@ -114,7 +114,7 @@ public class FileSystemStorageService implements StorageService {
         try {
             Files.createDirectories(targetDir);
         } catch (IOException e) {
-            throw new StorageException("Ay klasörü oluşturulamadı: " + targetDir, e);
+            throw new StorageIOException("Ay klasörü oluşturulamadı: " + targetDir, e);
         }
 
         // --- İçeriği geçici dosyaya yaz + SHA-256 hesapla ---
@@ -125,7 +125,7 @@ public class FileSystemStorageService implements StorageService {
         try {
             tempFile = Files.createTempFile(targetDir, ".upload-", ".tmp");
         } catch (IOException e) {
-            throw new StorageException("Geçici dosya oluşturulamadı: " + targetDir, e);
+            throw new StorageIOException("Geçici dosya oluşturulamadı: " + targetDir, e);
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -138,7 +138,7 @@ public class FileSystemStorageService implements StorageService {
             throw new StorageException("SHA-256 algoritması bulunamadı.", e);
         } catch (IOException e) {
             deleteQuietly(tempFile);
-            throw new StorageException("Dosya yazılamadı: " + targetDir, e);
+            throw new StorageIOException("Dosya yazılamadı: " + targetDir, e);
         }
 
         // --- İçerik bazlı duplicate: aynı SHA-256 zaten varsa ---
@@ -151,18 +151,24 @@ public class FileSystemStorageService implements StorageService {
         String baseName = buildBaseName(serviceName, invoiceDate, fileType);
         Path finalPath = resolveNonClashingName(targetDir, baseName, extension);
 
-        // Atomik taşı; başarısız olursa normal taşımaya düş. Kısmi/başarısız taşımada
-        // temp dosyasının orphan kalmamasını moved bayrağı + finally garanti eder.
+        // Atomik taşı. ATOMIC_MOVE başarısız olursa, eşzamanlı bir yazar tam o anda aynı
+        // hedef adı oluşturmuş olabilir; düz Files.move ile FARKLI bir dosyayı SESSİZCE
+        // EZMEK yerine, taze çakışmasız bir ad yeniden çözülür ve ATOMIC_MOVE tekrar
+        // denenir. Yalnızca ikinci deneme de başarısız olursa hata fırlatılır. Kısmi/
+        // başarısız taşımada temp dosyasının orphan kalmamasını moved bayrağı + finally
+        // garanti eder.
         boolean moved = false;
         try {
             try {
                 Files.move(tempFile, finalPath, StandardCopyOption.ATOMIC_MOVE);
             } catch (IOException atomicFailed) {
-                Files.move(tempFile, finalPath);
+                // Eşzamanlı yazar hedefi kapmış olabilir → yeni boş ad bul, tekrar dene.
+                finalPath = resolveNonClashingName(targetDir, baseName, extension);
+                Files.move(tempFile, finalPath, StandardCopyOption.ATOMIC_MOVE);
             }
             moved = true;
         } catch (IOException e) {
-            throw new StorageException("Dosya taşınamadı: " + finalPath, e);
+            throw new StorageIOException("Dosya taşınamadı: " + finalPath, e);
         } finally {
             if (!moved) {
                 deleteQuietly(tempFile);
@@ -191,7 +197,7 @@ public class FileSystemStorageService implements StorageService {
                 Files.createDirectories(parent);
             }
         } catch (IOException e) {
-            throw new StorageException("Hedef dizin oluşturulamadı: " + parent, e);
+            throw new StorageIOException("Hedef dizin oluşturulamadı: " + parent, e);
         }
 
         // İçeriği geçici dosyaya yaz + SHA-256 hesapla.
@@ -199,7 +205,7 @@ public class FileSystemStorageService implements StorageService {
         try {
             tempFile = Files.createTempFile(parent, ".copy-", ".tmp");
         } catch (IOException e) {
-            throw new StorageException("Geçici dosya oluşturulamadı: " + parent, e);
+            throw new StorageIOException("Geçici dosya oluşturulamadı: " + parent, e);
         }
         String sha256;
         long size;
@@ -214,7 +220,7 @@ public class FileSystemStorageService implements StorageService {
             throw new StorageException("SHA-256 algoritması bulunamadı.", e);
         } catch (IOException e) {
             deleteQuietly(tempFile);
-            throw new StorageException("Dosya yazılamadı: " + target, e);
+            throw new StorageIOException("Dosya yazılamadı: " + target, e);
         }
 
         String relForReturn = root.relativize(target).toString();
@@ -248,7 +254,7 @@ public class FileSystemStorageService implements StorageService {
             }
             moved = true;
         } catch (IOException e) {
-            throw new StorageException("Dosya taşınamadı: " + target, e);
+            throw new StorageIOException("Dosya taşınamadı: " + target, e);
         } finally {
             if (!moved) {
                 deleteQuietly(tempFile);
@@ -272,7 +278,7 @@ public class FileSystemStorageService implements StorageService {
             }
             return toHex(digest.digest());
         } catch (NoSuchAlgorithmException | IOException e) {
-            throw new StorageException("Mevcut dosyanın hash'i hesaplanamadı: " + file, e);
+            throw new StorageIOException("Mevcut dosyanın hash'i hesaplanamadı: " + file, e);
         }
     }
 
@@ -303,7 +309,7 @@ public class FileSystemStorageService implements StorageService {
             }
             return resource;
         } catch (IOException e) {
-            throw new StorageException("Kaynak yüklenemedi: " + asset.getFilePath(), e);
+            throw new StorageIOException("Kaynak yüklenemedi: " + asset.getFilePath(), e);
         }
     }
 
@@ -344,7 +350,7 @@ public class FileSystemStorageService implements StorageService {
         try {
             Files.createDirectories(targetDir);
         } catch (IOException e) {
-            throw new StorageException("Hedef dizin oluşturulamadı: " + targetDir, e);
+            throw new StorageIOException("Hedef dizin oluşturulamadı: " + targetDir, e);
         }
 
         if (!Files.exists(source)) {
@@ -357,7 +363,7 @@ public class FileSystemStorageService implements StorageService {
         try {
             Files.move(source, target);
         } catch (IOException e) {
-            throw new StorageException("Dosya taşınamadı: " + source + " -> " + target, e);
+            throw new StorageIOException("Dosya taşınamadı: " + source + " -> " + target, e);
         }
 
         asset.setFilePath(root.relativize(target).toString());

@@ -120,6 +120,28 @@ class ServiceControllerIT extends AbstractDataCleanupIT {
         assertThat(dto).doesNotContainKeys("provider", "defaultCard", "usingTeam");
     }
 
+    // E1 review #3: ?size çok büyük olsa bile (allocation-DoS) Spring sayfa boyutunu
+    // spring.data.web.pageable.max-page-size (=100) ile kırpar. size=99999 → page.size <= 100.
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void oversizedPageSizeIsCappedAt100() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken());
+
+        ResponseEntity<Map> resp = rest.exchange(
+                "/api/v1/services?size=99999",
+                HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = resp.getBody();
+        assertThat(body).isNotNull();
+        // Etkin sayfa boyutu 100'e kırpılmalı (99999 DEĞİL).
+        assertThat(((Number) body.get("size")).intValue()).isLessThanOrEqualTo(100);
+        // İçerik de hiçbir zaman 100 satırı aşmamalı.
+        List<Map<String, Object>> content = (List<Map<String, Object>>) body.get("content");
+        assertThat(content.size()).isLessThanOrEqualTo(100);
+    }
+
     @Test
     @SuppressWarnings("rawtypes")
     void listServicesUnauthenticatedReturns401InErrorResponseShape() {

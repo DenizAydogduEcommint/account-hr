@@ -26,6 +26,14 @@
 - **I:** `_refund` suffix, `.tmp` sayımı, isFooterRow/classifyRow "TOPLAM" aşırı-drop, ProcessBuilder drain join (false 502), validateFileName control-char, active_months→TEXT (V10).
 - **Borç E2-DR-1:** SHA-256 içerik-aynı dosyanın iki farklı invoice'a tam bağlanması (junction/ManyToMany) → V9 unique kısıtı nedeniyle ertelendi; şimdilik raporlanıyor.
 
+**E1 DERİN CODE REVIEW (3 ajan + ultrathink, 2026-06-26):** Çekirdek altyapı (auth/crypto/audit/domain/storage/API/config) dar+derin tarandı. **16 bulgu düzeltildi** (backend 208 test, +10; V11 migration gerçek PG'de uygulandı+doğrulandı). Güvenlik ağırlıklı:
+- **Güvenlik:** `FileController.upload` rol-gate (TEAM_MEMBER yükleyemez; `InvoiceController`/E3-05 `isAuthenticated` korundu), GlobalExceptionHandler path/SHA sızıntısı → sabit mesaj+log, unbounded `?size=` DoS → cap 100, Swagger prod/staging kapalı, multipart eksik-part 500→400.
+- **Auth:** logout atomik (`revokeIfActive`), CORS env-bound (`CorsProperties`), BCrypt cost 12.
+- **Correctness:** AuditLog.note 1024, FK `ON DELETE SET NULL` (V11), bilinmeyen currency log.warn, RefreshToken LAZY, `StorageIOException`→503, storage concurrency re-probe, Provider `lower(name)` unique (V11). **Temizlik:** JWT dead role-claim kaldırıldı.
+- **Crypto katmanı derinlemesine TEMİZ** (AES-GCM IV taze SecureRandom, JWT alg-confusion yok, refresh rotation atomik, secret fail-fast).
+- **Gerçek doğrulama:** V11 PG'de uygulandı (provider lower-index temiz), eksik Mart=2 + dashboard=114.355,40 regresyonsuz, path-leak yanıtı temiz.
+- **Yeni borç (E1-DR):** (1) `@Version` optimistic locking yok; (2) `Service(name,provider_id)` UNIQUE yok; (3) BigDecimal `setScale` (hash-stable koruma gerekçesiyle ertelendi); (4) AuditInterceptor StatelessSession refactor; (5) FileAsset sha256 partial-unique H2-test gap.
+
 ---
 
 ## E1 — Temel Altyapı & Veri Modeli

@@ -87,14 +87,15 @@ public class AuthService {
         return issueTokens(user);
     }
 
-    /** Verilen refresh token'ı iptal et (logout). Bulunamazsa sessizce no-op (idempotent). */
+    /**
+     * Verilen refresh token'ı iptal et (logout). ATOMİK tek-UPDATE ({@code revokeIfActive})
+     * kullanır — {@code refresh()} ile aynı desen. Dönen sayı yok sayılır: zaten iptal
+     * edilmiş/bulunamayan token 0 satır günceller → idempotent no-op (çift logout güvenli).
+     */
     @Transactional
     public void logout(String rawRefreshToken) {
         String hash = jwtService.hashRefreshToken(rawRefreshToken);
-        refreshTokenRepository.findByTokenHash(hash).ifPresent(token -> {
-            token.setRevoked(true);
-            refreshTokenRepository.save(token);
-        });
+        refreshTokenRepository.revokeIfActive(hash);
     }
 
     /** Mevcut kullanıcının bilgisi (/api/auth/me). */

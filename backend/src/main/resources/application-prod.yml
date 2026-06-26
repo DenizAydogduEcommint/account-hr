@@ -13,6 +13,14 @@ spring:
   flyway:
     enabled: true
 
+# Swagger UI / OpenAPI api-docs prod'da KAPALI (E1 review #4) — saldırı yüzeyini
+# (uç keşfi/şema sızıntısı) küçültür. dev/local açık kalır.
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
 # Structured (JSON) loglama — Spring Boot 3.x native (ek bağımlılık yok). ECS formatı,
 # stdout'a JSON; merkezi toplama (ELK/Loki, faz 2) için uygundur. Correlation id MDC'den
 # (correlationId) gelir. Seviye env ile override edilebilir.

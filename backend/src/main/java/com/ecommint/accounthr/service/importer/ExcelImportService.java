@@ -197,7 +197,7 @@ public class ExcelImportService {
 
         LocalDate transactionDate = getDate(row, COL_DATE, dataFormatter);
         BigDecimal amount = getDecimal(row, COL_AMOUNT, dataFormatter);
-        Currency currency = parseCurrency(getString(row, COL_CURRENCY, dataFormatter));
+        Currency currency = parseCurrency(getString(row, COL_CURRENCY, dataFormatter), periodCode, rowIndex);
         BigDecimal amountTry = getDecimal(row, COL_AMOUNT_TRY, dataFormatter);
         String cardLast4 = parseCardLast4(getString(row, COL_CARD, dataFormatter));
         String purpose = blankToNull(getString(row, COL_PURPOSE, dataFormatter));
@@ -452,7 +452,12 @@ public class ExcelImportService {
         }
     }
 
-    private Currency parseCurrency(String raw) {
+    /**
+     * Para birimi metnini {@link Currency}'ye çevirir. Bilinmeyen bir kod (TL/TRY/USD/EUR/GBP
+     * dışında ve boş değil) TRY'ye düşer AMA artık SESSİZ değildir: {@code log.warn} ile
+     * kaydedilir (parse edilen değer DEĞİŞMEZ, dolayısıyla satır-hash'i etkilenmez).
+     */
+    private Currency parseCurrency(String raw, String periodCode, int rowIndex) {
         if (raw == null) {
             return Currency.TRY;
         }
@@ -462,7 +467,11 @@ public class ExcelImportService {
             case "EUR" -> Currency.EUR;
             case "GBP" -> Currency.GBP;
             case "TL", "TRY", "" -> Currency.TRY;
-            default -> Currency.TRY;
+            default -> {
+                log.warn("Bilinmeyen para birimi '{}' → TRY varsayıldı: sheet={}, row={}",
+                        raw, periodCode, rowIndex + 1);
+                yield Currency.TRY;
+            }
         };
     }
 

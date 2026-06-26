@@ -63,7 +63,15 @@ public class FileController {
         this.userRepository = userRepository;
     }
 
-    /** Dosya yükle + FileAsset kaydı oluştur. */
+    /**
+     * Dosya yükle + FileAsset kaydı oluştur.
+     *
+     * <p>Bu generic/admin dosya ucu fatura PDF'lerini doğrudan storage köküne yazdığından
+     * en ayrıcalıklı işlemdir; kardeş okuma/taşıma uçlarıyla tutarlı olarak yalnızca
+     * ADMIN/ACCOUNTING rollerine açıktır. (E3-05 self-service yükleme yolu
+     * {@code POST /api/v1/invoices} ayrıdır ve TEAM_MEMBER'a açık kalır.)
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTING')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<FileResponse> upload(
             @RequestParam("file") MultipartFile file,

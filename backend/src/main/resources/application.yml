@@ -3,6 +3,13 @@ spring:
     name: account-hr
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  data:
+    web:
+      pageable:
+        # Sayfa boyutu üst sınırı (allocation-DoS koruması): kimliği doğrulanmış bir
+        # kullanıcı ?size=2000+ ile aşırı satır talep edemez. İstenen size > 100 ise
+        # Spring 100'e kırpar (E1 review #3).
+        max-page-size: 100
   servlet:
     multipart:
       # Fatura dosyaları için yükleme limitleri (E1-04). Tek dosya ve toplam istek
@@ -61,6 +68,11 @@ app:
   # kendi "yalnızca-dev" anahtarını verir. Staging/prod'da env zorunlu; eksikse boot fail.
   crypto:
     master-key: ${CREDENTIAL_MASTER_KEY:}
+  # CORS izinli origin'leri (E1 review #6). Koda gömülü DEĞİL; local varsayılanı Angular
+  # dev sunucusudur. staging/prod APP_CORS_ALLOWED_ORIGINS env'inden (virgülle ayrık) okur.
+  # allowCredentials(true) ile joker (*) kullanılamaz → somut origin listesi.
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:4200}
 
 # Loglama (E1-05). Varsayılan (local) profilde insan-okur desen; her satıra correlation
 # id (X-Request-Id) eklenir. staging/prod profilleri structured (JSON) loglamaya geçer.

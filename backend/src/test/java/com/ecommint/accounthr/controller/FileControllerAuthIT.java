@@ -12,15 +12,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import com.ecommint.accounthr.AbstractDataCleanupIT;
 import com.ecommint.accounthr.domain.AppUser;
@@ -133,5 +137,68 @@ class FileControllerAuthIT extends AbstractDataCleanupIT {
         ResponseEntity<String> resp = rest.getForEntity(
                 "/api/v1/files/" + fileId + "/download", String.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    // ------------------------------------------------------------------------
+    // E1 review #1: POST /api/v1/files (generic/admin upload ucu) artık ADMIN/ACCOUNTING
+    // rol-kapısına tabidir. (E3-05 self-service yolu POST /api/v1/invoices AYRIDIR ve
+    // TEAM_MEMBER'a açık kalır — burada test edilmez.)
+    // ------------------------------------------------------------------------
+
+    private ResponseEntity<String> uploadAs(String email) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token(email));
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        ByteArrayResource fileResource = new ByteArrayResource("UPLOAD-BYTES".getBytes()) {
+            @Override
+            public String getFilename() {
+                return "upload_test.pdf";
+            }
+        };
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", fileResource);
+        // invoiceId mevcut değil → ADMIN için akış yetki kapısını GEÇER, sonra
+        // STORAGE_ERROR (Invoice bulunamadı) ile düşer; önemli olan 403 OLMAMASIDIR.
+        body.add("invoiceId", "999999");
+        body.add("invoiceDate", "2026-03-01");
+        body.add("serviceName", "Auth Test Service");
+
+        return rest.postForEntity("/api/v1/files",
+                new HttpEntity<>(body, headers), String.class);
+    }
+
+    /** Kimliği doğrulanmış TEAM_MEMBER → 403 (rol kapısı, gövde değerlendirilmeden). */
+    @Test
+    void teamMemberCannotUpload() {
+        ResponseEntity<String> resp = uploadAs(memberEmail);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /** ADMIN rol kapısını geçer → 403 DEĞİL (geçersiz invoiceId nedeniyle 400 olur). */
+    @Test
+    void adminPassesUploadRoleGate() {
+        ResponseEntity<String> resp = uploadAs(adminEmail);
+        assertThat(resp.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * Eksik "file" part'ı olan multipart isteği → istemci hatası 400 (önceden 500'dü).
+     * MissingServletRequestPartException artık GlobalExceptionHandler'da 400'e map edilir.
+     */
+    @Test
+    void adminMissingFilePartGets400NotServerError() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token(adminEmail));
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        // "file" part'ı kasıtlı olarak yok — yalnızca diğer alanlar gönderilir.
+        body.add("invoiceId", "999999");
+        body.add("invoiceDate", "2026-03-01");
+        body.add("serviceName", "Auth Test Service");
+
+        ResponseEntity<String> resp = rest.postForEntity("/api/v1/files",
+                new HttpEntity<>(body, headers), String.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

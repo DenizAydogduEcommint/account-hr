@@ -60,7 +60,7 @@ public class AuditLog {
     @Column(name = "changed_at", nullable = false, updatable = false)
     private LocalDateTime changedAt;
 
-    @Column(name = "note")
+    @Column(name = "note", length = 1024)
     private String note;
 
     public Long getId() {

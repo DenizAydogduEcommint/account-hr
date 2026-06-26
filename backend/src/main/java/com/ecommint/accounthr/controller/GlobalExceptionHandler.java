@@ -14,6 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
@@ -25,6 +27,7 @@ import com.ecommint.accounthr.service.importer.ExcelImportException;
 import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
 import com.ecommint.accounthr.service.storage.StorageException;
+import com.ecommint.accounthr.service.storage.StorageIOException;
 import com.ecommint.accounthr.service.storage.StoragePathTraversalException;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -96,6 +99,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request, null);
     }
 
+    /**
+     * Eksik/bozuk multipart isteği (örn. POST /files'a "file" part'ı olmadan istek) →
+     * istemci hatasıdır, 400 döner; genel handler aksi halde yanıltıcı 500 üretirdi.
+     */
+    @ExceptionHandler({ MissingServletRequestPartException.class, MultipartException.class })
+    public ResponseEntity<ErrorResponse> handleMultipart(
+            Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "INVALID_MULTIPART",
+                "Geçersiz veya eksik dosya yükleme isteği.", request, null);
+    }
+
     @ExceptionHandler({ BadCredentialsException.class, AuthenticationException.class })
     public ResponseEntity<ErrorResponse> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED",
@@ -113,10 +127,18 @@ public class GlobalExceptionHandler {
         throw ex;
     }
 
-    /** Mükerrer dosya (aynı provider+invoice_no veya aynı SHA-256) → 409 CONFLICT. */
+    /**
+     * Mükerrer dosya (aynı provider+invoice_no veya aynı SHA-256) → 409 CONFLICT.
+     *
+     * <p>{@code ex.getMessage()} mutlak dosya yolu ve/veya SHA-256 içerebilir; bunlar
+     * YANITA KONMAZ (bilgi sızıntısı). Sabit bir mesaj döner, orijinali traceId ile
+     * yalnızca sunucu loguna yazılır.
+     */
     @ExceptionHandler(DuplicateFileException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateFile(DuplicateFileException ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "DUPLICATE_FILE", ex.getMessage(), request, null);
+        logSanitized("DUPLICATE_FILE", ex, request);
+        return build(HttpStatus.CONFLICT, "DUPLICATE_FILE",
+                "A duplicate file already exists.", request, null);
     }
 
     /**
@@ -132,17 +154,40 @@ public class GlobalExceptionHandler {
                 "The request conflicts with the current state of a resource.", request, null);
     }
 
-    /** Path traversal / kök dışı yol → 400 BAD_REQUEST. */
+    /**
+     * Path traversal / kök dışı yol → 400 BAD_REQUEST. Mesaj mutlak dosya yolu içerebilir;
+     * sabit mesaj döner, orijinali logla.
+     */
     @ExceptionHandler(StoragePathTraversalException.class)
     public ResponseEntity<ErrorResponse> handlePathTraversal(
             StoragePathTraversalException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "INVALID_PATH", ex.getMessage(), request, null);
+        logSanitized("INVALID_PATH", ex, request);
+        return build(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Invalid file path.", request, null);
     }
 
-    /** Diğer depolama hataları (geçersiz girdi, I/O) → 400 BAD_REQUEST. */
+    /**
+     * Sunucu tarafı depolama I/O arızası (disk dolu, taşıma/temp-create başarısız) →
+     * 503 SERVICE_UNAVAILABLE. Bu çağıran girdisi hatası DEĞİLDİR. {@link StorageException}
+     * alt türü olduğundan Spring bu daha-özgül handler'ı 400'lük {@link #handleStorage}
+     * yerine seçer. Mesaj mutlak yol içerebilir → sabit mesaj döner, orijinali logla.
+     */
+    @ExceptionHandler(StorageIOException.class)
+    public ResponseEntity<ErrorResponse> handleStorageIO(StorageIOException ex, HttpServletRequest request) {
+        logSanitized("STORAGE_IO_ERROR", ex, request);
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "STORAGE_IO_ERROR",
+                "File storage operation failed.", request, null);
+    }
+
+    /**
+     * Diğer depolama hataları (geçersiz GİRDİ doğrulaması: boş serviceName, null tarih) →
+     * 400 BAD_REQUEST. I/O arızaları {@link StorageIOException} ile yukarıda 503'e ayrıldı.
+     * Mesaj mutlak yol içerebilir → sabit mesaj döner, orijinali logla.
+     */
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorage(StorageException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "STORAGE_ERROR", ex.getMessage(), request, null);
+        logSanitized("STORAGE_ERROR", ex, request);
+        return build(HttpStatus.BAD_REQUEST, "STORAGE_ERROR",
+                "File storage operation failed.", request, null);
     }
 
     /** Excel import hatası (okuma/parse) → 400 BAD_REQUEST. */
@@ -227,6 +272,16 @@ public class GlobalExceptionHandler {
         log.error("Unhandled 500 [traceId={}] on {} {}", traceId, request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred.", request, null);
+    }
+
+    /**
+     * Depolama hatalarının ORİJİNAL mesajını (mutlak yol / SHA-256 içerebilir) yalnızca
+     * sunucu loguna yazar; HTTP yanıtına sabit, sızdırmayan bir mesaj döner.
+     */
+    private void logSanitized(String code, Exception ex, HttpServletRequest request) {
+        String traceId = org.slf4j.MDC.get("correlationId");
+        log.warn("{} [traceId={}] on {} {}: {}", code, traceId,
+                request.getMethod(), request.getRequestURI(), ex.getMessage());
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String code, String message,

@@ -22,7 +22,8 @@ import io.jsonwebtoken.security.Keys;
 /**
  * JWT access token üretimi/doğrulaması ve opaque refresh token üretimi.
  *
- * - Access token: HS256 imzalı JWT. Claim'ler: sub=userId, email, role.
+ * - Access token: HS256 imzalı JWT. Claim'ler: sub=userId, email. (role claim YOK —
+ *   rol DB'den okunur; bkz. generateAccessToken.)
  * - Refresh token: opaque (rastgele 256-bit), DB'de SHA-256 hash'i saklanır.
  *   JWT DEĞİLDİR; iptal edilebilirlik için DB'de tutulur.
  *
@@ -72,14 +73,20 @@ public class JwtService {
         return refreshTtlSeconds;
     }
 
-    /** Kullanıcı için imzalı access JWT üret. */
+    /**
+     * Kullanıcı için imzalı access JWT üret.
+     *
+     * <p>NOT: Token'a {@code role} claim'i KASITLI OLARAK eklenmez. Yetkilendirme rolü
+     * her istekte {@link JwtAuthenticationFilter} tarafından DB'den (AppUser) okunur —
+     * rolün TEK yetkili kaynağı veritabanıdır. Bu, anlık iptal/rol-değişikliği sağlar
+     * ve token'a gömülü bayat (stale) rol tehlikesini ortadan kaldırır.
+     */
     public String generateAccessToken(AppUser user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + accessTtlSeconds * 1000L);
         return Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("email", user.getEmail())
-                .claim("role", user.getRole().name())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)

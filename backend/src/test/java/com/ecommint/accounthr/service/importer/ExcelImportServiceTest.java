@@ -450,6 +450,67 @@ class ExcelImportServiceTest {
         }
     }
 
+    /**
+     * E1 review #10: bilinmeyen para birimi (TL/TRY/USD/EUR/GBP dışında) ARTIK SESSİZ
+     * DEĞİL — TRY'ye düşer AMA bir {@code log.warn} üretir (parse edilen değer değişmez,
+     * dolayısıyla satır-hash'i etkilenmez ve import yine başarılı olur).
+     */
+    @Test
+    void unknownCurrencyImportsAsTryAndLogsWarning() {
+        ch.qos.logback.classic.Logger importLogger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ExcelImportService.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        importLogger.addAppender(appender);
+        try {
+            ImportSummary summary = importService.importMonthlySheets(
+                    new ByteArrayInputStream(buildUnknownCurrencySheet()));
+            entityManager.flush();
+            entityManager.clear();
+
+            // Satır TRY fallback ile import edildi.
+            assertThat(summary.getTotalImported()).isEqualTo(1);
+            List<Expense> expenses = expenseRepository.findAll();
+            assertThat(expenses).hasSize(1);
+            assertThat(expenses.get(0).getCurrency()).isEqualTo(Currency.TRY);
+
+            // Bilinmeyen para birimi için WARN logu üretildi (artık sessiz değil).
+            assertThat(appender.list)
+                    .anySatisfy(event -> {
+                        assertThat(event.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                        assertThat(event.getFormattedMessage())
+                                .contains("Bilinmeyen para birimi")
+                                .contains("XYZ");
+                    });
+        } finally {
+            importLogger.detachAppender(appender);
+        }
+    }
+
+    /** "Mart" sheet'i: tek satır, geçersiz Para Birimi "XYZ". */
+    private byte[] buildUnknownCurrencySheet() {
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Mart");
+            writeHeader(sheet);
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(1).setCellValue("Mystery Service");
+            r1.createCell(2).setCellValue("Mystery Provider");
+            r1.createCell(3).setCellValue(42.0);
+            r1.createCell(4).setCellValue("XYZ"); // bilinmeyen para birimi
+            r1.createCell(5).setCellValue(1000.0);
+            r1.createCell(6).setCellValue("****3800");
+            r1.createCell(10).setCellValue("Bulundu");
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private Expense findByService(List<Expense> expenses, String serviceName) {
         return expenses.stream()
                 .filter(e -> serviceName.equals(e.getService().getName()))

@@ -200,6 +200,23 @@ class AuthFlowIT extends AbstractDataCleanupIT {
         assertThat(afterLogout.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // E1 review #5: logout artık atomik revokeIfActive kullanır → çift logout (aynı token)
+    // iki kez de hatasız 204 döner (idempotent no-op; ikinci çağrı 0 satır günceller).
+    @Test
+    @SuppressWarnings("unchecked")
+    void doubleLogoutIsIdempotent() {
+        String refresh = (String) login(adminEmail, PASSWORD).get("refreshToken");
+
+        ResponseEntity<Void> first = rest.postForEntity(
+                "/api/v1/auth/logout", Map.of("refreshToken", refresh), Void.class);
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        // İkinci logout aynı (zaten iptal edilmiş) token ile → yine 204, hata yok.
+        ResponseEntity<Void> second = rest.postForEntity(
+                "/api/v1/auth/logout", Map.of("refreshToken", refresh), Void.class);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
     // 7. admin-only endpoint with TEAM_MEMBER → 403
     @Test
     @SuppressWarnings({ "rawtypes", "unchecked" })

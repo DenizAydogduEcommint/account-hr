@@ -75,7 +75,9 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // OWASP önerisi: BCrypt cost 12 (açıkça). Mevcut hash'ler bcrypt'in kendi cost'unu
+        // kodladığından farklı cost'la üretilmiş eski hash'ler de doğrulanmaya devam eder.
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean

@@ -1,5 +1,6 @@
 package com.ecommint.accounthr.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,15 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByStatus(InvoiceStatus status);
 
     List<Invoice> findByExpenseId(Long expenseId);
+
+    /**
+     * E3-03 — Verilen expense'lere bağlı TÜM invoice'lar (toplu, N+1'siz). Aylık harcamalar
+     * ekranı her satır için temsilci (en güncel = en yüksek id'li) invoice'un durum + notunu
+     * gösterir; seçim servis katmanında {@code id}'ye göre yapılır. {@code id ASC} sıralı gelir
+     * ki "son kazanır" indirgemesi deterministik olsun. Boş koleksiyon → boş liste.
+     */
+    @Query("SELECT i FROM Invoice i WHERE i.expense.id IN :expenseIds ORDER BY i.id ASC")
+    List<Invoice> findByExpenseIdIn(@Param("expenseIds") Collection<Long> expenseIds);
 
     /**
      * "Fatura Notu" (note) alanı dolu olan tüm invoice'lar. E2-03 eşleme indeksini

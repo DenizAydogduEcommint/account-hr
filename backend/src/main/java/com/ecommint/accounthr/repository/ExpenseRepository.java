@@ -3,13 +3,61 @@ package com.ecommint.accounthr.repository;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import com.ecommint.accounthr.domain.Expense;
 
-public interface ExpenseRepository extends JpaRepository<Expense, Long> {
+public interface ExpenseRepository
+        extends JpaRepository<Expense, Long>, JpaSpecificationExecutor<Expense> {
 
     List<Expense> findByPeriodId(Long periodId);
+
+    /**
+     * E3-03 — Bir dönemin bilgi-amaçlı ({@code informational=true}) harcamaları
+     * (Multinet / sigorta / vergi). Aylık harcamalar ekranında ayrı bölümde, operasyonel
+     * toplama dahil edilmeden gösterilir. Servis/sağlayıcı eager-fetch'lenir (DTO eşlemesi
+     * için lazy session bağımlılığını azaltır). Tarihe göre sıralı.
+     */
+    @Query("SELECT e FROM Expense e "
+            + "LEFT JOIN FETCH e.service s "
+            + "LEFT JOIN FETCH s.provider "
+            + "LEFT JOIN FETCH e.card "
+            + "LEFT JOIN FETCH e.usingTeam "
+            + "WHERE e.period.id = :periodId AND e.informational = true "
+            + "ORDER BY e.transactionDate ASC NULLS LAST, e.id ASC")
+    List<Expense> findInformationalByPeriod(
+            @org.springframework.data.repository.query.Param("periodId") Long periodId);
+
+    /**
+     * E3-03 — Dönemin bilgi-amaçlı ({@code informational=true}) harcama TL alt toplamı.
+     * Operasyonel toplama dahil DEĞİLDİR; ekranda ayrı bölüm alt toplamı olarak gösterilir.
+     * {@code amount_try} NULL satırları katkı vermez (SUM NULL'ları atlar); hiç satır yoksa
+     * {@code null} döner.
+     */
+    @Query("SELECT SUM(e.amountTry) FROM Expense e "
+            + "WHERE e.period.id = :periodId AND e.informational = true")
+    java.math.BigDecimal sumInformationalAmountTryByPeriod(
+            @org.springframework.data.repository.query.Param("periodId") Long periodId);
+
+    /**
+     * E3-03 N+1 fix — Sayfa içeriğinin expense ID'leri için service/provider/card/usingTeam
+     * eager-fetch'li (tek sorgu) yeniden çekim. ANA sayfa yolu önce {@code findAll(spec,
+     * pageable)} ile DOĞRU sayfalama + count üretir (koleksiyon FETCH yok → count bozulmaz),
+     * sonra bu sorgu o sayfanın ID'lerini TEK sorguda ilişkileriyle getirir; böylece
+     * {@code toRow()} içindeki lazy erişimler (service, provider, card, usingTeam) per-row
+     * sorgu üretmez. Yalnızca {@code *ToOne} ilişkileri fetch edilir (koleksiyon değil),
+     * IN listesi sınırlı (sayfa boyutu kadar) olduğundan sayfalama bozulmaz. Sıra çağıran
+     * tarafça sayfa sırasına göre yeniden kurulur (IN sonucu sıralı gelmeyebilir).
+     */
+    @Query("SELECT e FROM Expense e "
+            + "LEFT JOIN FETCH e.service s "
+            + "LEFT JOIN FETCH s.provider "
+            + "LEFT JOIN FETCH e.card "
+            + "LEFT JOIN FETCH e.usingTeam "
+            + "WHERE e.id IN :ids")
+    List<Expense> findByIdInFetchingRefs(
+            @org.springframework.data.repository.query.Param("ids") List<Long> ids);
 
     /** "Bu servisin bu ay bir satırı var mı?" — eksik fatura çapraz doğrulaması. */
     boolean existsByServiceIdAndPeriodId(Long serviceId, Long periodId);

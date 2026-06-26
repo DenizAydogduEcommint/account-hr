@@ -44,8 +44,20 @@ public record PagedResponse<T>(
 
     /** İçeriği {@code mapper} ile dönüştürerek (entity → DTO) bir {@link Page}'i sarar. */
     public static <S, T> PagedResponse<T> from(Page<S> page, Function<S, T> mapper) {
+        return from(page, page.getContent(), mapper);
+    }
+
+    /**
+     * Sayfalama METADATA'sını {@code page}'ten alır ama içeriği AYRI verilen {@code content}
+     * listesinden ({@code mapper} ile) üretir. N+1 azaltma deseni için: sayfalama/count doğru
+     * {@code Page} sorgusundan gelir, içerik ise ilişkileri eager-fetch'li yeniden çekilmiş
+     * (ve sayfa sırasına göre dizilmiş) listeden eşlenir. {@code content} sayfa içeriğiyle
+     * AYNI elemanları/sırayı taşımalıdır.
+     */
+    public static <S, T> PagedResponse<T> from(Page<S> page, List<S> content,
+            Function<S, T> mapper) {
         return new PagedResponse<>(
-                page.getContent().stream().map(mapper).toList(),
+                content.stream().map(mapper).toList(),
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),

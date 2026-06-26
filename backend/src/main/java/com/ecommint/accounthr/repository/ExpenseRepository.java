@@ -62,6 +62,36 @@ public interface ExpenseRepository
     /** "Bu servisin bu ay bir satırı var mı?" — eksik fatura çapraz doğrulaması. */
     boolean existsByServiceIdAndPeriodId(Long serviceId, Long periodId);
 
+    /**
+     * E3-04 — Verilen dönemde durumu {@code FOUND} ya da {@code E_INVOICE} olan EN AZ BİR
+     * harcaması bulunan servislerin distinct ID'leri. "Faturası bulunmuş" servis tanımıdır:
+     * çapraz doğrulamada bu kümedeki servisler eksik DEĞİLDİR. Tek sorgu (per-servis N+1 yok);
+     * kontrol kümesi ile küme-farkı alınarak eksikler bulunur.
+     *
+     * <p>"Var" tanımı satır durumu değil INVOICE durumu üzerinden kurulur: aynı expense'in
+     * birden çok invoice'u olabilir (iade / invoice+receipt); herhangi biri FOUND/E_INVOICE
+     * ise servis o ay için "bulundu" sayılır. Bekleniyor ({@code EXPECTED}) ya da hiç invoice
+     * olmaması bu kümeye katkı vermez → servis eksik kalır.
+     */
+    @Query("SELECT DISTINCT e.service.id FROM Expense e JOIN Invoice i ON i.expense = e "
+            + "WHERE e.period.id = :periodId "
+            + "AND i.status IN (com.ecommint.accounthr.domain.enums.InvoiceStatus.FOUND, "
+            + "com.ecommint.accounthr.domain.enums.InvoiceStatus.E_INVOICE)")
+    List<Long> findServiceIdsWithFoundInvoiceInPeriod(
+            @org.springframework.data.repository.query.Param("periodId") Long periodId);
+
+    /**
+     * E3-04 — Verilen servisler için "en son görüldüğü ay" eşlemesi: her servisin herhangi bir
+     * harcamasında geçen EN BÜYÜK period kodu (YYYY-MM lexicografik = kronolojik). Tek toplu
+     * sorgu (N+1 yok). {@code [serviceId, maxPeriodCode]} satırları döner; hiç harcaması olmayan
+     * servis sonuçta yer almaz (çağıran tarafça null kabul edilir).
+     */
+    @Query("SELECT e.service.id, MAX(e.period.code) FROM Expense e "
+            + "WHERE e.service.id IN :serviceIds GROUP BY e.service.id")
+    List<Object[]> findLastSeenMonthByServiceIds(
+            @org.springframework.data.repository.query.Param("serviceIds")
+            java.util.Collection<Long> serviceIds);
+
     /** Importer idempotency: aynı kaynak satır hash'i daha önce eklenmiş mi? (E2-01) */
     boolean existsBySourceRowHash(String sourceRowHash);
 

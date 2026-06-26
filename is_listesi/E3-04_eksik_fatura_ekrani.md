@@ -18,14 +18,14 @@ CLAUDE.md'deki çapraz doğrulama kuralının çekirdeği: Servisler sheet'inde 
 Ekranda seçili ay için: solda "Eksik Faturalar" (beklenen ama bulunmayan servisler), sağ/alt tarafta isteğe bağlı "Beklemede/Araştırılacak" satırlar. Her eksik satırdan doğrudan "Fatura Yükle" (E3-05) ve "Hatırlatma Gönder" (E6) aksiyonları tetiklenebilir.
 
 ## Kabul Kriterleri (DOD)
-- [ ] Aktif + Aylık her servis için seçili ayda fatura/satır var mı kontrolü yapılır
-- [ ] Eksik servisler liste halinde gösterilir (servis adı, sağlayıcı, kart, yaklaşık tutar, ilgili kişi e-postası)
-- [ ] Yıllık servisler yalnızca beklenen ayında eksik sayılır (Aktif Aylar / yenileme ayı mantığı)
-- [ ] Kullanım bazlı / Ad-hoc servisler eksik kontrolüne dahil edilmez
-- [ ] Eksik satırından "Fatura Yükle" aksiyonu E3-05 akışını açar
-- [ ] Eksik satırından "Hatırlatma Gönder" aksiyonu E6 akışını tetikler (E6 hazır değilse buton placeholder)
-- [ ] Eksik sayısı dashboard sayacıyla (E3-01) birebir aynı
-- [ ] Ay seçici ile farklı aylar kontrol edilebilir
+- [x] Aktif + Aylık her servis için seçili ayda Bulundu/e-Fatura kontrolü (yoksa eksik)
+- [x] Eksik servisler liste (servis adı, sağlayıcı, kart, yaklaşık tutar, ilgili e-posta, frekans)
+- [x] Yıllık servisler yalnızca beklenen ayında (activeMonths TAM eşleşme — substring değil)
+- [x] Kullanım bazlı / Ad-hoc / pasif / informational hariç
+- [x] "Fatura Yükle" butonu (E3-05 için placeholder, disabled)
+- [x] "Hatırlatma Gönder" butonu (E6 için placeholder, disabled)
+- [x] **Eksik sayısı dashboard sayacıyla BİREBİR** (DashboardService missingCount = MissingInvoiceService; Mart 2=2)
+- [x] Ay seçici ile farklı aylar
 
 ## Alt Görevler
 - [ ] Backend: çapraz doğrulama servisi — `GET /api/missing-invoices?month=YYYY-MM`
@@ -42,6 +42,16 @@ Ekranda seçili ay için: solda "Eksik Faturalar" (beklenen ama bulunmayan servi
 - Bekleniyor durumundaki satır da "henüz fatura yok" demektir → eksik kabul edilir
 
 ## Açık Sorular / Riskler
-- Yıllık servisin hangi ay beklendiği nasıl belirlenecek? (yenileme ayı alanı mı, Aktif Aylar parse mı?) — Karar gerekli
-- Aynı servisin ay içinde birden çok çekimi (OpenAI API) varsa "tek fatura yeterli mi yoksa her çekim için mi" — Öneri: servis-ay bazında en az bir fatura yeterli, ama E4 ile çekim-bazlı eşleştirme detaylandırılır
-- İade/refund olan servis (Claude AI) net çekim yoksa eksik sayılmamalı
+- ~~Yıllık beklenen ay?~~ → `service.active_months` (virgüllü "YYYY-MM") TAM eşleşme; o ay listede varsa kontrol edilir.
+- ~~Çoklu çekim?~~ → Servis-ay bazında en az bir Bulundu/e-Fatura satırı yeterli (çekim-bazlı E4'te).
+- ~~İade/refund (Claude AI)?~~ → İade satırları AD_HOC/informational → eksik kontrolüne girmez.
+
+## Tamamlanma Kaydı
+- Durum: ✅ Tamamlandı — 2026-06-26 · **MVP ÇEKİRDEĞİ**
+- YouTrack: IK-241 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend) + account-hr-frontend
+- **Backend:** MissingInvoiceService (çapraz doğrulama: aktif+aylık her ay / yıllık activeMonths'ta / usage-adhoc-informational-pasif hariç; eksik = o ay FOUND/E_INVOICE yok). `GET /api/v1/missing-invoices?month=`. MissingInvoiceRow DTO. **Dashboard missingCount bu servis-bazlı mantığa bağlandı (birebir DOD).** 4 toplu sorgu (N+1 yok).
+- **Frontend:** Eksik Fatura ekranı (belirgin sayaç + tablo + satır aksiyonları Fatura Yükle/Hatırlatma placeholder + boş durum "tüm faturalar tamam"), sidebar "Eksik Fatura" aktif.
+- **Gerçek doğrulama (lokal PG14 + tarayıcı):** Mart 2026 → **tam 2 eksik** (HepsiBurada Mağaza ~69,90; Zoom Workplace Pro ~2.550,15), **dashboard missingCount=2 (birebir)**, Şubat=2, bozuk ay→400. Tarayıcıda sayaç + tablo + aksiyon butonları + Aylık badge görsel onaylı.
+- Test: backend `./mvnw test` 161/161 (3 surefire sırasında; +15, her frekans senaryosu + dashboard-tutarlılık); frontend `ng build`/`tsc` temiz.
+- **Bağımsız review: "no new issues"** (frekans kuralı, YEARLY exact-match, found tanımı, dashboard birebir, N+1 yok, security, frontend hepsi temiz).

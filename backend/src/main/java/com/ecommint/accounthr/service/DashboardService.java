@@ -40,13 +40,16 @@ public class DashboardService {
     private final PeriodRepository periodRepository;
     private final ExpenseRepository expenseRepository;
     private final InvoiceRepository invoiceRepository;
+    private final MissingInvoiceService missingInvoiceService;
 
     public DashboardService(PeriodRepository periodRepository,
             ExpenseRepository expenseRepository,
-            InvoiceRepository invoiceRepository) {
+            InvoiceRepository invoiceRepository,
+            MissingInvoiceService missingInvoiceService) {
         this.periodRepository = periodRepository;
         this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
+        this.missingInvoiceService = missingInvoiceService;
     }
 
     /**
@@ -79,12 +82,17 @@ public class DashboardService {
         Map<InvoiceStatus, Long> counts = toCountMap(
                 invoiceRepository.countGroupByStatusForPeriod(periodId));
 
-        return buildSummary(echoMonth, totalTry, expenseCount, counts);
+        // DOD (E3-04): "eksik sayısı dashboard ile birebir". missingCount artık eski
+        // EXPECTED-invoice sayısı DEĞİL; servis ↔ ay çapraz doğrulamasından (eksik fatura
+        // ekranıyla TEK kaynak) gelir. İki ekran asla çelişmez.
+        long missingCount = missingInvoiceService.findMissing(echoMonth).size();
+
+        return buildSummary(echoMonth, totalTry, expenseCount, counts, missingCount);
     }
 
     /** Bilinmeyen/boş ay: tüm değerler sıfır, statusCounts 5 girdi (hepsi 0). */
     private DashboardSummary zeroedSummary(String month) {
-        return buildSummary(month, BigDecimal.ZERO, 0L, emptyCountMap());
+        return buildSummary(month, BigDecimal.ZERO, 0L, emptyCountMap(), 0L);
     }
 
     /** {@code [InvoiceStatus, Long]} satırlarını eksik durumları 0'a tamamlayan map'e çevirir. */
@@ -107,14 +115,16 @@ public class DashboardService {
     }
 
     private DashboardSummary buildSummary(String month, BigDecimal totalTry, long expenseCount,
-            Map<InvoiceStatus, Long> counts) {
+            Map<InvoiceStatus, Long> counts, long missingCount) {
         List<StatusCount> statusCounts = new ArrayList<>(STATUS_ORDER.size());
         for (InvoiceStatus status : STATUS_ORDER) {
             statusCounts.add(new StatusCount(
                     status, counts.get(status), StatusColors.STATUS_TO_HEX.get(status)));
         }
 
-        long missingCount = counts.get(InvoiceStatus.EXPECTED);
+        // missingCount = servis ↔ ay çapraz doğrulama sonucu (E3-04 ile TEK kaynak);
+        // statusCounts içindeki EXPECTED adedi donut dağılımı için ham invoice sayısı olarak
+        // kalır (KPI "eksik" sayacıyla aynı OLMAYABİLİR — biri servis-bazlı, diğeri invoice-bazlı).
         long foundCount = counts.get(InvoiceStatus.FOUND) + counts.get(InvoiceStatus.E_INVOICE);
         long investigateCount = counts.get(InvoiceStatus.TO_INVESTIGATE);
 

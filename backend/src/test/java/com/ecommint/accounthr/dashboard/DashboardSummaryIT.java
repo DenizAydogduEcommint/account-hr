@@ -177,8 +177,10 @@ class DashboardSummaryIT extends AbstractDataCleanupIT {
                 .isEqualByComparingTo(EXPECTED_TOTAL_TRY);
         // expenseCount: 3 ana harcama (informational hariç).
         assertThat(((Number) body.get("expenseCount")).longValue()).isEqualTo(3L);
-        // missingCount = EXPECTED (3).
-        assertThat(((Number) body.get("missingCount")).longValue()).isEqualTo(3L);
+        // missingCount artık servis ↔ ay çapraz doğrulamasından (E3-04) gelir, EXPECTED
+        // invoice sayısından DEĞİL. Tek aday "DashTest Service" (MONTHLY + YES) bu ay
+        // FOUND faturalı harcamaya sahip → eksik DEĞİL → missingCount = 0.
+        assertThat(((Number) body.get("missingCount")).longValue()).isEqualTo(0L);
         // foundCount = FOUND(2) + E_INVOICE(1) = 3.
         assertThat(((Number) body.get("foundCount")).longValue()).isEqualTo(3L);
         // investigateCount = TO_INVESTIGATE (1).

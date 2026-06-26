@@ -20,6 +20,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * Hibernate transaction callback'lerinden yönetilir; ROLLBACK'te kayıtlar yazılmaz
  * (bkz. {@code AuditInterceptor.beforeTransactionCompletion}).
  *
+ * <p><b>E1-DR-4 — yazma mekanizması:</b> Tampondaki kayıtlar {@link AuditFlusher} tarafından,
+ * Hibernate'in {@code beforeTransactionCompletion}'ından, AYNI transaction bağlantısı üzerinde
+ * açılan bir {@code StatelessSession} ile doğrudan INSERT edilir. Eskiden Spring-Data
+ * {@code repository.save(...)} kullanılıyordu; bu, pre-completion içinde nested ORM flush
+ * tetikleyerek tehlike yaratıyordu — StatelessSession ile bu kaldırıldı (nested ORM flush yok).
+ *
  * <p><b>Transaction dışı yol:</b> Aktif bir transaction synchronization yoksa kaydı kalıcı
  * yapmanın yolu yoktur ({@code AuditFlusher} transaction commit'inde çalışır). Bu durumda
  * kayıt sessizce ATILIR — ThreadLocal'da biriktirmek hiç temizlenmeyeceği için sızıntı

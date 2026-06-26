@@ -25,8 +25,18 @@ import com.ecommint.accounthr.domain.enums.AuditAction;
  *   <li>{@code onDelete} → DELETE</li>
  * </ul>
  *
- * <p>Yakalanan kayıtlar {@link AuditContext}'e (ThreadLocal) eklenir; gerçek INSERT,
- * transaction commit'inden hemen önce {@code AuditFlusher} tarafından yapılır.
+ * <p>Yakalanan kayıtlar {@link AuditContext}'e (aktif transaction'a bağlı tampon) eklenir;
+ * gerçek INSERT, transaction commit'inden hemen önce {@code AuditFlusher} tarafından yapılır.
+ *
+ * <p><b>E1-DR-4 — yazma artık nested-flush YAPMAYAN bir StatelessSession ile.</b> Eskiden
+ * {@code beforeTransactionCompletion} içinden Spring-Data {@code AuditLogRepository.save(...)}
+ * çağrılıyordu; bu, ManagedSession üzerinde YENİ BİR ORM flush tetikler — Hibernate'in
+ * pre-completion callback'i içinde belgelenmiş bir tehlikedir (beklenmedik re-flush döngüleri,
+ * re-entrant interceptor). Bu refactor'da yakalama ({@code onSave/onFlushDirty/onDelete}) AYNEN
+ * kalır; yalnızca YAZMA mekanizması değişir: {@link AuditFlusher}, audit satırlarını AYNI
+ * transaction'ın JDBC bağlantısı üzerinde açılan bir {@code StatelessSession} ile doğrudan
+ * INSERT eder — Spring-Data yok, nested ORM flush yok, re-entrancy yok. Atomiklik korunur
+ * (aynı bağlantı/transaction); ROLLBACK'te kayıtlar yazılmaz (aşağıdaki rollback koruması).
  *
  * <p>HASSAS alanlar (parola, parola hash'i, token, şifreli secret, master key) audit'e
  * ASLA yazılmaz — {@link #SENSITIVE_FIELDS} ile atlanır. Bu interceptor zaten
@@ -126,7 +136,11 @@ public class AuditInterceptor implements Interceptor {
     /**
      * Transaction completion'dan HEMEN ÖNCE Hibernate tarafından çağrılır (bu transaction'a
      * özgü). Bu noktada Hibernate'in pre-completion auto-flush'ı çalıştığı için dirty-check
-     * değişiklikleri yakalanmış ve CREATE id'leri atanmıştır.
+     * değişiklikleri ({@code onFlushDirty}) yakalanmış ve CREATE id'leri atanmıştır.
+     *
+     * <p>E1-DR-4: Bu callback yalnızca YAZMAYI TETİKLER. Asıl INSERT, {@link AuditFlusher}
+     * tarafından AYNI transaction bağlantısı üzerinde bir {@code StatelessSession} ile yapılır
+     * (nested ORM flush YOK; eski {@code repository.save} tehlikesi giderildi).
      *
      * <p>ROLLBACK koruması: callback hem commit hem rollback yolunda tetiklenir. Transaction
      * rollback'e işaretlenmişse audit kayıtları YAZILMAZ — yalnızca tampon temizlenir; aksi
@@ -154,7 +168,7 @@ public class AuditInterceptor implements Interceptor {
 
     @Override
     public void afterTransactionCompletion(Transaction tx) {
-        // Bu transaction'ın TSM resource'unu (ve fallback thread-local'i) çöz.
+        // Bu transaction'ın TSM resource'unu çöz.
         AuditContext.clear();
     }
 

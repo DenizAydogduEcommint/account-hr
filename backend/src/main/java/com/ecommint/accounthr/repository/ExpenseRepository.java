@@ -91,9 +91,15 @@ public interface ExpenseRepository
      * harcamasında geçen EN BÜYÜK period kodu (YYYY-MM lexicografik = kronolojik). Tek toplu
      * sorgu (N+1 yok). {@code [serviceId, maxPeriodCode]} satırları döner; hiç harcaması olmayan
      * servis sonuçta yer almaz (çağıran tarafça null kabul edilir).
+     *
+     * <p>E3 deep-review #4: yalnızca OPERASYONEL ({@code informational=false}) harcamalar
+     * sayılır. "Bulundu" kapısı ({@code findServiceIdsWithFoundInvoiceInPeriod}) da
+     * {@code informational=false} kullandığından, "en son görülen ay" da bilgi-amaçlı
+     * (ignored/Multinet/sigorta) aktiviteyi YANSITMAMALI — aksi halde tutarsız olurdu.
      */
     @Query("SELECT e.service.id, MAX(e.period.code) FROM Expense e "
-            + "WHERE e.service.id IN :serviceIds GROUP BY e.service.id")
+            + "WHERE e.service.id IN :serviceIds AND e.informational = false "
+            + "GROUP BY e.service.id")
     List<Object[]> findLastSeenMonthByServiceIds(
             @org.springframework.data.repository.query.Param("serviceIds")
             java.util.Collection<Long> serviceIds);

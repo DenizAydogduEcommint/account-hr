@@ -94,14 +94,30 @@ public class ExpenseQueryService {
         if (!expenseRepository.existsById(expenseId)) {
             throw new ResourceNotFoundException("Harcama bulunamadı: id=" + expenseId);
         }
-        // invoice id ASC sıralı dolaş → dosyalar deterministik sırada gelir.
+        // invoice id ASC sıralı → dosyalar deterministik sırada gelir.
         List<Invoice> invoices = new ArrayList<>(invoiceRepository.findByExpenseId(expenseId));
         invoices.sort(java.util.Comparator.comparing(Invoice::getId));
+        if (invoices.isEmpty()) {
+            return List.of();
+        }
+
+        // E3 deep-review #5 (N+1 fix): per-invoice findByInvoiceId döngüsü yerine TEK toplu
+        // sorgu (findByInvoiceIdIn), sonra invoice id'ye göre grupla.
+        List<Long> invoiceIds = invoices.stream().map(Invoice::getId).toList();
+        Map<Long, List<FileAsset>> filesByInvoice = new HashMap<>();
+        for (FileAsset f : fileAssetRepository.findByInvoiceIdIn(invoiceIds)) {
+            Long invId = f.getInvoice() != null ? f.getInvoice().getId() : null;
+            if (invId == null) {
+                continue;
+            }
+            filesByInvoice.computeIfAbsent(invId, k -> new ArrayList<>()).add(f);
+        }
 
         // file id'ye göre tekilleştir, eklenme sırasını koru (invoice ASC + file ASC).
         Map<Long, FileAsset> byFileId = new LinkedHashMap<>();
         for (Invoice inv : invoices) {
-            List<FileAsset> files = new ArrayList<>(fileAssetRepository.findByInvoiceId(inv.getId()));
+            List<FileAsset> files = filesByInvoice.getOrDefault(inv.getId(), List.of());
+            files = new ArrayList<>(files);
             files.sort(java.util.Comparator.comparing(FileAsset::getId));
             for (FileAsset f : files) {
                 byFileId.putIfAbsent(f.getId(), f);

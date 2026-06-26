@@ -10,6 +10,13 @@ public interface FileAssetRepository extends JpaRepository<FileAsset, Long> {
 
     List<FileAsset> findByInvoiceId(Long invoiceId);
 
+    /**
+     * E3 deep-review #5 (N+1 fix) — Birden çok invoice'un dosyalarını TEK sorguda getirir
+     * ({@code ExpenseQueryService.listFiles} per-invoice {@code findByInvoiceId} döngüsü
+     * yerine). Çağıran tarafça invoice id'ye göre gruplanır + file id'ye göre tekilleştirilir.
+     */
+    List<FileAsset> findByInvoiceIdIn(java.util.Collection<Long> invoiceIds);
+
     /** Duplicate tespiti (bütünlük): aynı içerik hash'ine sahip kayıtlar. */
     List<FileAsset> findBySha256(String sha256);
 

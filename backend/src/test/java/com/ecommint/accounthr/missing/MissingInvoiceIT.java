@@ -258,6 +258,53 @@ class MissingInvoiceIT extends AbstractDataCleanupIT {
         assertThat(missingNames(MONTH)).contains("Bilgi-Found Eksik");
     }
 
+    /**
+     * E3 deep-review #4 — {@code lastSeenMonth} yalnızca OPERASYONEL ({@code
+     * informational=false}) harcamaları yansıtır. Bir servisin bir aydaki TEK harcaması
+     * bilgi-amaçlıysa o ay "en son görülen" sayılmaz.
+     *
+     * <p>Senaryo: servis bu ay (2026-09) eksik; operasyonel harcaması 2026-08'de, bilgi-amaçlı
+     * harcaması DAHA SONRA 2026-11'de. lastSeen = 2026-08 (operasyonel) olmalı — 2026-11 DEĞİL.
+     */
+    @Test
+    void lastSeenMonthIgnoresInformationalExpenses() {
+        com.ecommint.accounthr.domain.Service s =
+                service("LastSeen Bilgi", Frequency.MONTHLY, ActiveState.YES, false, null);
+
+        Period aug = new Period();
+        aug.setYear(2026);
+        aug.setMonth(8);
+        aug.setCode("2026-08");
+        periodRepository.save(aug);
+
+        Period nov = new Period();
+        nov.setYear(2026);
+        nov.setMonth(11);
+        nov.setCode("2026-11");
+        periodRepository.save(nov);
+
+        // Operasyonel harcama 2026-08 (FOUND değil → bu ayı temizlemez, ama lastSeen kaynağı).
+        Expense opAug = new Expense();
+        opAug.setService(s);
+        opAug.setPeriod(aug);
+        opAug.setCurrency(Currency.TRY);
+        opAug.setInformational(false);
+        expenseRepository.save(opAug);
+
+        // Bilgi-amaçlı harcama 2026-11 (daha büyük period kodu) — lastSeen'i KİRLETMEMELİ.
+        Expense infoNov = new Expense();
+        infoNov.setService(s);
+        infoNov.setPeriod(nov);
+        infoNov.setCurrency(Currency.TRY);
+        infoNov.setInformational(true);
+        expenseRepository.save(infoNov);
+
+        Map<String, Object> row = getMissing(MONTH).stream()
+                .filter(r -> "LastSeen Bilgi".equals(r.get("serviceName")))
+                .findFirst().orElseThrow();
+        assertThat(row.get("lastSeenMonth")).isEqualTo("2026-08");
+    }
+
     /** YEARLY + YES, Aktif Aylar bu ayı İÇERİYOR, fatura yok → eksik. */
     @Test
     void yearlyActiveInRenewalMonthWithNoInvoiceIsMissing() {

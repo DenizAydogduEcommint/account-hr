@@ -77,6 +77,15 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | E2-06 | Drive waiting senkron köprüsü | ✅ | IK-237. rclone subprocess pull köprüsü, push yapısal imkansız. GERÇEK Drive'da kanıtlandı: 17 dosya pull, silme yok. 116 test |
 
 ## E3 — Web Uygulaması (MVP)
+
+**E3 DERİN CODE REVIEW (3 ajan + ultrathink, 2026-06-26):** Tüm E3 serisi (backend query/çapraz-doğrulama · backend controller/yetki/preview · tüm frontend) görevler-arası kesişim odaklı tarandı. **13 gerçek bulgu düzeltildi** (backend 284 test +6; frontend tsc/build temiz). Önceki üç review turunda görünmeyen, yalnız akış-kesişiminde çıkan sorunlar:
+- **🔴 Stored-XSS** (E3-05 upload × E3-09 preview): client `Content-Type` doğrulanmadan saklanıp `inline` servis ediliyordu → `MimeTypes.fromExtension` (server-derive) + preview allowlist (non-safe → `application/octet-stream`). Canlı: preview hep `application/pdf`, DB'de tehlikeli mime 0.
+- **🔴 Frontend birleşik-durum** (expenses.component büyüdü): `Blob.text()` stale-write → generation-guard; download hatası başka dosyanın preview'ını bozuyordu → ayrı `downloadError` signal; eşzamanlı indirme/toggle iptali → guard/ayrı sub.
+- **Upload tutarsızlığı:** upload-created expense `source=STATEMENT`+`transactionDate=null` → MANUAL + ayın 1'i; `lastSeenMonth` informational dahil ediyordu → filtre; listFiles N+1 → batch; POST/files 10MB check.
+- **Zaman-bombası:** `DEFAULT_MONTH`/month-selector hardcoded 2026 → dinamik (`new Date`).
+- **Review false-positive (REDDEDİLDİ, doğru karar):** "upload duplicate-expense → double-count" — `(service,period)` informational=false'da MEŞRU çoklu satır var (ör. OpenAI Şubat 7 ayrı çekim, "her işlem ayrı satır" kuralı); unique index veriyi bozardı → V17 no-op, toplam zaten doğru.
+- **Temiz onaylandı:** dashboard↔missing↔total tutarlılığı, temsilci-invoice (max-id) 4 callsite, IGNORED↔informational bağımsızlığı, IDOR (single-org), pagination, validation.
+
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
 | E3-01 | Dashboard / aylık özet | ✅ | IK-238. **Tasarım sistemi kuruldu** (E-Commint yeşil/navy, Maven Pro). Dashboard: KPI + donut + ay seçici. Tarayıcıda doğrulandı (Mart ₺114.355,40). İki repo |

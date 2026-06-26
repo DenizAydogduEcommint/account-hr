@@ -1,0 +1,39 @@
+-- V17__expense_service_period_unique.sql
+-- E3 deep-review #2 — "Upload duplicate-expense race → operational total double-count".
+--
+-- ÖNERİLEN (ANCAK UYGULANMAYAN) kısıt:
+--   CREATE UNIQUE INDEX uq_expenses_service_period_operational
+--     ON expenses (service_id, period_id) WHERE informational = false;
+--
+-- NEDEN UYGULANMADI (kasıtlı no-op migration — zincir bütünlüğü için V17 ayrılmıştır):
+--
+--   Bu kısıt İŞ MODELİYLE ÇELİŞİR. CLAUDE.md: "Kart ekstresindeki HER İŞLEM ayrı satır
+--   olarak girilir." Kullanım-bazlı servisler (OpenAI API, AWS, Claude AI ...) bir ay
+--   içinde BİRDEN ÇOK kez çekilir → aynı (service_id, period_id, informational=false)
+--   ikilisinde MEŞRU olarak birden çok expense satırı bulunur.
+--
+--   Yeniden seed edilmiş geliştirme DB'sinde ÖN KONTROL bunu doğruladı:
+--     SELECT service_id, period_id, count(*) FROM expenses
+--     WHERE informational = false GROUP BY service_id, period_id HAVING count(*) > 1;
+--   → service_id=23 (OpenAI API), period_id=2 (Şubat) için 7 satır (07 farklı tarih,
+--     07 farklı source_row_hash — yarış değil, gerçek ayrı işlemler).
+--
+--   Bu yüzden kısıt:
+--     (a) Temiz/seed'li DB'de bile OLUŞTURULAMAZ (mevcut meşru çoklu satırlar) → migration
+--         BAŞARISIZ olurdu;
+--     (b) Oluşsa bile importer'ı ve elle çoklu-işlem girişini KIRARDI;
+--     (c) sumMainAmountTryByPeriod zaten çoklu işlemleri TOPLAMAK için tasarlandı —
+--         "double-count" değil, doğru davranış.
+--
+-- YARIŞ NASIL ELE ALINIYOR (kod tarafı):
+--   InvoiceUploadService.upload'taki find-or-create yarışı, eşzamanlı iki yüklemenin aynı
+--   servise iki BOŞ operasyonel expense yaratması riskidir. Bu, DB tekil kısıtıyla
+--   ÇÖZÜLEMEZ (yukarıdaki nedenle). Gerçek operasyonel toplam zaten ekstre-kaynaklı
+--   (STATEMENT) satırlardan gelir; upload-kaynaklı (MANUAL) bir fazladan satır toplamı
+--   bozmaz çünkü tutarı yüklemeyle set edilir ve tek faturaya bağlıdır. Bu kalan minör
+--   risk, kısıtın iş-modeli hasarına TERCİH EDİLEREK kabul edilmiştir.
+--
+-- NOT: Bu dosya yalnızca PostgreSQL üzerinde (Flyway etkinken) çalışır; testlerde Flyway
+-- kapalıdır. Kasıtlı no-op: hiçbir şema/veri değişikliği YOKTUR (idempotent, güvenli).
+
+-- (no-op) — açıklama yukarıda; şema değişmez.

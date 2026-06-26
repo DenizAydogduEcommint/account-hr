@@ -425,6 +425,50 @@ class InvoiceUploadIT extends AbstractDataCleanupIT {
     }
 
     /**
+     * E3 deep-review #1 (Stored-XSS) — istemcinin gönderdiği Content-Type ne olursa olsun,
+     * depolanan mimeType UZANTIDAN türetilir. {@code .pdf} uzantılı dosya → {@code
+     * application/pdf} (asla {@code text/html} değil). Böylece önizleme inline HTML render
+     * edemez.
+     */
+    @Test
+    void uploadDerivesMimeTypeFromExtensionNotClientContentType() {
+        com.ecommint.accounthr.domain.Service s = service("XSS Mime");
+
+        ResponseEntity<Map<String, Object>> resp = upload(
+                s.getId(), MONTH, null, null, null, false, List.of("x.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Long invoiceId = ((Number) resp.getBody().get("invoiceId")).longValue();
+        List<com.ecommint.accounthr.domain.FileAsset> assets =
+                fileAssetRepository.findByInvoiceId(invoiceId);
+        assertThat(assets).hasSize(1);
+        // SUNUCU TARAFI türetme: .pdf → application/pdf (istemci Content-Type yok sayıldı).
+        assertThat(assets.get(0).getMimeType()).isEqualTo("application/pdf");
+    }
+
+    /**
+     * E3 deep-review #3 — Upload ile YENİ oluşturulan expense: {@code source=MANUAL}
+     * (ekstreden gelmedi) ve {@code transactionDate} = ayın 1'i (null değil; E3-06
+     * "tarih zorunlu" sözleşmesiyle tutarlı).
+     */
+    @Test
+    void uploadCreatedExpenseHasManualSourceAndFirstOfMonthDate() {
+        com.ecommint.accounthr.domain.Service s = service("Source Date");
+
+        ResponseEntity<Map<String, Object>> resp = upload(
+                s.getId(), MONTH, new BigDecimal("42.00"), Currency.TRY, null, false,
+                List.of("sd_mart.pdf"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(resp.getBody().get("expenseCreated")).isEqualTo(true);
+
+        Long expenseId = ((Number) resp.getBody().get("expenseId")).longValue();
+        Expense e = expenseRepository.findById(expenseId).orElseThrow();
+        assertThat(e.getSource()).isEqualTo(
+                com.ecommint.accounthr.domain.enums.ExpenseSource.MANUAL);
+        assertThat(e.getTransactionDate()).isEqualTo(java.time.LocalDate.of(2026, 3, 1));
+    }
+
+    /**
      * FIX 2 — Pre-existing invoice'un notu KÖRÜ KÖRÜNE EZİLMEZ; yeni bilgi eklenir.
      * Reconciliation/importer'ın yazdığı not (ör. dosya path'i) korunmalı.
      */

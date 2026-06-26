@@ -33,6 +33,7 @@ import com.ecommint.accounthr.repository.AppUserRepository;
 import com.ecommint.accounthr.repository.FileAssetRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.service.FileUploadService;
+import com.ecommint.accounthr.service.InvoiceUploadService;
 import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StorageService;
@@ -87,6 +88,12 @@ public class FileController {
         if (file == null || file.isEmpty()) {
             throw new StorageException("Boş dosya yüklenemez.");
         }
+        // E3 deep-review #6: 10MB iş kuralını burada da uygula (InvoiceUploadService ile
+        // aynı sınır). Aksi halde dosya servlet'in 25MB sınırına kadar SESSİZCE depolanırdı.
+        if (file.getSize() > InvoiceUploadService.MAX_FILE_SIZE_BYTES) {
+            throw new StorageException("Dosya boyutu 10MB sınırını aşıyor: "
+                    + file.getOriginalFilename());
+        }
 
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new StorageException("Invoice bulunamadı: id=" + invoiceId));
@@ -117,7 +124,10 @@ public class FileController {
                 effectiveInvoiceNo,
                 file.getOriginalFilename(),
                 content,
-                file.getContentType(),
+                // E3 deep-review #1 (Stored-XSS): istemci Content-Type'ı GÜVENİLMEZ —
+                // mime SUNUCU TARAFINDA uzantıdan türetilir (file.getContentType() yok sayılır).
+                com.ecommint.accounthr.service.storage.MimeTypes.fromExtension(
+                        file.getOriginalFilename()),
                 type,
                 uploader);
 
@@ -237,6 +247,13 @@ public class FileController {
     private MediaType resolvePreviewContentType(FileAsset asset) {
         String mime = asset.getMimeType();
         if (mime != null && !mime.isBlank()) {
+            // E3 deep-review #1 (Stored-XSS, belt-and-suspenders): yüklemede mime artık
+            // sunucu-tarafı türetilse de, depolanan eski/anormal bir mime (ör. text/html)
+            // inline render edilmemeli. Allowlist DIŞINDAKİ her mime → octet-stream (indirme;
+            // asla inline aktif içerik çalıştırmaz).
+            if (!com.ecommint.accounthr.service.storage.MimeTypes.isPreviewSafe(mime)) {
+                return MediaType.APPLICATION_OCTET_STREAM;
+            }
             String m = mime.toLowerCase(java.util.Locale.ROOT);
             // XML/metin → charset'li text/xml ki tarayıcı inline göstersin.
             if (m.contains("xml")) {

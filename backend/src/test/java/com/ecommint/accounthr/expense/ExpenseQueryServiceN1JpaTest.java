@@ -75,6 +75,7 @@ class ExpenseQueryServiceN1JpaTest {
     @Autowired private PeriodRepository periodRepository;
     @Autowired private ExpenseRepository expenseRepository;
     @Autowired private InvoiceRepository invoiceRepository;
+    @Autowired private com.ecommint.accounthr.repository.FileAssetRepository fileAssetRepository;
     @Autowired private ExpenseQueryService expenseQueryService;
     @Autowired private EntityManager entityManager;
 
@@ -185,6 +186,78 @@ class ExpenseQueryServiceN1JpaTest {
         assertThat(largePageQueries)
                 .as("bounded constant number of queries per page")
                 .isLessThanOrEqualTo(12L);
+    }
+
+    /**
+     * E3 deep-review #5 — {@link ExpenseQueryService#listFiles} bir expense'in BİRDEN ÇOK
+     * invoice'unun dosyalarını TEK toplu sorguyla ({@code findByInvoiceIdIn}) çeker (per-invoice
+     * {@code findByInvoiceId} döngüsü değil); sonuç invoice id ASC + file id ASC sıralı ve file
+     * id'ye göre tekilleştirilmiştir. Burada 2 invoice + 3 dosya senaryosunda dosyaların
+     * doğru/tam geldiğini doğrularız (sorgu sayısı invoice sayısıyla büyümez).
+     */
+    @Test
+    void listFilesBatchesAcrossMultipleInvoices() {
+        seedCommon();
+
+        Expense e = new Expense();
+        e.setService(service);
+        e.setPeriod(period);
+        e.setCard(card);
+        e.setUsingTeam(team);
+        e.setTransactionDate(LocalDate.of(2026, 8, 1));
+        e.setAmount(new BigDecimal("10.00"));
+        e.setCurrency(Currency.TRY);
+        e.setAmountTry(new BigDecimal("10.00"));
+        e.setInformational(false);
+        expenseRepository.save(e);
+
+        Invoice inv1 = new Invoice();
+        inv1.setExpense(e);
+        inv1.setStatus(InvoiceStatus.FOUND);
+        invoiceRepository.save(inv1);
+
+        Invoice inv2 = new Invoice();
+        inv2.setExpense(e);
+        inv2.setStatus(InvoiceStatus.E_INVOICE);
+        invoiceRepository.save(inv2);
+
+        // inv1: 2 dosya, inv2: 1 dosya → toplam 3 (file id'ler distinct).
+        saveFile(inv1, "a.pdf", "aaa1");
+        saveFile(inv1, "b.pdf", "bbb1");
+        saveFile(inv2, "c.xml", "ccc1");
+        entityManager.flush();
+        entityManager.clear();
+
+        Statistics stats = statistics();
+        stats.clear();
+        List<com.ecommint.accounthr.dto.file.ExpenseFileResponse> files =
+                expenseQueryService.listFiles(e.getId());
+        long queriesForFiles = stats.getPrepareStatementCount();
+
+        // 3 dosya, doğru isimler, deterministik sıra (inv1 ASC: a,b; sonra inv2: c).
+        assertThat(files).hasSize(3);
+        assertThat(files.stream().map(com.ecommint.accounthr.dto.file.ExpenseFileResponse::fileName))
+                .containsExactly("a.pdf", "b.pdf", "c.xml");
+
+        // Toplu çekim: dosya-getirme sorgusu invoice SAYISIYLA büyümez (2 invoice → 1 IN sorgusu).
+        // existsById + invoice listesi + tek findByInvoiceIdIn → küçük sabit set.
+        assertThat(queriesForFiles)
+                .as("listFiles must batch file fetch (no per-invoice query)")
+                .isLessThanOrEqualTo(4L);
+    }
+
+    private void saveFile(Invoice invoice, String name, String sha) {
+        com.ecommint.accounthr.domain.FileAsset f = new com.ecommint.accounthr.domain.FileAsset();
+        f.setInvoice(invoice);
+        f.setFilePath("2026-08/" + name);
+        f.setFileName(name);
+        f.setFileType(name.endsWith(".xml")
+                ? com.ecommint.accounthr.domain.enums.FileType.XML
+                : com.ecommint.accounthr.domain.enums.FileType.PDF);
+        f.setMimeType(name.endsWith(".xml") ? "application/xml" : "application/pdf");
+        f.setSizeBytes(10L);
+        f.setSha256(sha);
+        fileAssetRepository.save(f);
     }
 
     @Test

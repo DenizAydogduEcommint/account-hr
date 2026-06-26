@@ -287,6 +287,42 @@ class ExpenseFilePreviewIT extends AbstractDataCleanupIT {
         assertThat(resp.getHeaders().getContentType().toString()).contains("xml");
     }
 
+    /**
+     * E3 deep-review #1 (Stored-XSS, belt-and-suspenders) — depolanan mime allowlist DIŞINDA
+     * (ör. {@code text/html}) ise önizleme {@code application/octet-stream} ile servis edilir
+     * (asla inline {@code text/html} render etmez → aktif içerik çalışmaz).
+     */
+    @Test
+    void previewNonAllowlistedMimeServesOctetStream() throws Exception {
+        // FileAsset kaydını text/html mime ile oluştur (hipotetik eski/anormal kayıt) + fiziksel dosya.
+        Path dir = storageRoot.resolve("2026-08");
+        Files.createDirectories(dir);
+        Path html = dir.resolve("evil_agustos.pdf");
+        Files.write(html, "<script>alert(1)</script>".getBytes());
+
+        Invoice invoice = invoiceRepository.findById(
+                fileAssetRepository.findById(pdfFileId).orElseThrow().getInvoice().getId())
+                .orElseThrow();
+
+        FileAsset evil = new FileAsset();
+        evil.setInvoice(invoice);
+        evil.setFilePath("2026-08/evil_agustos.pdf");
+        evil.setFileName("evil_agustos.pdf");
+        evil.setFileType(FileType.PDF);
+        evil.setMimeType("text/html");
+        evil.setSizeBytes(25L);
+        evil.setSha256("ccc333");
+        Long evilId = fileAssetRepository.save(evil).getId();
+
+        ResponseEntity<byte[]> resp = rest.exchange(
+                "/api/v1/files/" + evilId + "/preview",
+                HttpMethod.GET, new HttpEntity<>(authHeaders()), byte[].class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // text/html allowlist'te DEĞİL → octet-stream (indirme; inline aktif içerik render edilmez).
+        assertThat(resp.getHeaders().getContentType().toString())
+                .startsWith("application/octet-stream");
+    }
+
     @Test
     @SuppressWarnings("rawtypes")
     void previewUnknownIdReturns404() {

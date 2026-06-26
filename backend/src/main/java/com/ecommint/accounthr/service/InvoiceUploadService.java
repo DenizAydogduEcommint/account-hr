@@ -39,6 +39,7 @@ import com.ecommint.accounthr.repository.FileAssetRepository;
 import com.ecommint.accounthr.repository.InvoiceRepository;
 import com.ecommint.accounthr.repository.PeriodRepository;
 import com.ecommint.accounthr.repository.ServiceRepository;
+import com.ecommint.accounthr.service.storage.MimeTypes;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StorageService;
 import com.ecommint.accounthr.service.storage.StoredFile;
@@ -84,8 +85,12 @@ public class InvoiceUploadService {
     private static final List<String> ALLOWED_EXTENSIONS =
             List.of("pdf", "xml", "jpg", "jpeg", "png");
 
-    /** Tek dosya için maksimum boyut: 10 MB. (Servlet katmanı 25MB; iş kuralı daha sıkı.) */
-    static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
+    /**
+     * Tek dosya için maksimum boyut: 10 MB. (Servlet katmanı 25MB; iş kuralı daha sıkı.)
+     * E3 deep-review #6: paylaşılan sabit — {@code FileController} POST /files yolunda da
+     * AYNI sınır uygulanır (public erişim için).
+     */
+    public static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
     private final ServiceRepository serviceRepository;
     private final PeriodRepository periodRepository;
@@ -173,6 +178,12 @@ public class InvoiceUploadService {
             expense.setAmountTry(effectiveCurrency == Currency.TRY ? amount : null);
             expense.setCurrency(effectiveCurrency);
             expense.setInformational(false);
+            // E3 deep-review #3: Bu satır bir banka ekstresinden GELMEDİ; bir kullanıcının
+            // yüklemesiyle oluştu → kaynağı MANUAL (E3-06 elle-oluşturma ile tutarlı;
+            // varsayılan STATEMENT yanlış olurdu). transactionDate de ayın 1'i (invoice
+            // tarihiyle aynı) — null bırakmak E3-06'nın "tarih zorunlu" sözleşmesiyle çelişirdi.
+            expense.setSource(com.ecommint.accounthr.domain.enums.ExpenseSource.MANUAL);
+            expense.setTransactionDate(ym.atDay(1));
             expense = expenseRepository.save(expense);
             expenseCreated = true;
         }
@@ -272,7 +283,10 @@ public class InvoiceUploadService {
                 asset.setFilePath(stored.relativePath());
                 asset.setFileName(stored.fileName());
                 asset.setFileType(type);
-                asset.setMimeType(file.getContentType());
+                // E3 deep-review #1 (Stored-XSS): istemci Content-Type'ı GÜVENİLMEZ.
+                // Uzantı validateFile() ile zaten doğrulandı → mime SUNUCU TARAFINDA
+                // uzantıdan türetilir; file.getContentType() KASTEN yok sayılır.
+                asset.setMimeType(MimeTypes.fromExtension(file.getOriginalFilename()));
                 asset.setSizeBytes(stored.sizeBytes());
                 asset.setSha256(stored.sha256());
                 asset.setUploadedBy(uploader);

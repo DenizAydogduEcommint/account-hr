@@ -186,6 +186,41 @@ class FileControllerAuthIT extends AbstractDataCleanupIT {
     }
 
     /**
+     * E3 deep-review #6 — POST /files'ta 10MB iş kuralı uygulanır. 10MB'ı aşan dosya
+     * (servlet 25MB sınırının ALTINDA ama iş sınırının ÜSTÜNDE) → 400 (sessizce depolanmaz).
+     * ADMIN ile gönderilir ki rol-kapısı değil boyut kapısı test edilsin.
+     */
+    @Test
+    void adminOversizedFileGets400() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token(adminEmail));
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        // 10MB + 1 byte → iş kuralını aşar (servlet 25MB'a takılmaz).
+        byte[] big = new byte[(int) (10L * 1024 * 1024 + 1)];
+        ByteArrayResource fileResource = new ByteArrayResource(big) {
+            @Override
+            public String getFilename() {
+                return "too_big.pdf";
+            }
+        };
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", fileResource);
+        body.add("invoiceId", "999999");
+        body.add("invoiceDate", "2026-03-01");
+        body.add("serviceName", "Oversize Test");
+
+        ResponseEntity<String> resp = rest.postForEntity("/api/v1/files",
+                new HttpEntity<>(body, headers), String.class);
+        // 400 STORAGE_ERROR (mesaj GlobalExceptionHandler'da sanitize edilir → "10MB" sızmaz).
+        // Boyut kapısı, invoice araması/depolamadan ÖNCE çalışır → 400 (sessiz 25MB depolama değil).
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody()).contains("STORAGE_ERROR");
+        // Sadece seed edilen tek FileAsset kalmalı — oversize dosya kaydedilmedi.
+        assertThat(fileAssetRepository.findAll()).hasSize(1);
+    }
+
+    /**
      * Eksik "file" part'ı olan multipart isteği → istemci hatası 400 (önceden 500'dü).
      * MissingServletRequestPartException artık GlobalExceptionHandler'da 400'e map edilir.
      */

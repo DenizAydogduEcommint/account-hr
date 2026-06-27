@@ -103,7 +103,7 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 ## E4 — Banka Ekstresi
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
-| E4-01 | Ekstre yükleme & parse | ⬜ | |
+| E4-01 | Ekstre yükleme & parse | 🔄 | IK-249. **Altyapı ✅** (RawTransaction+V19, StatementParser SPI, upload→önizle→onay, idempotency, ADMIN+ACCOUNTING, "Ekstre Yükle" ekranı). ⚠️ **Gerçek parser örnek ekstre bekliyor** (PlaceholderBankStatementExtractor TODO). 308 test. Review 4 bulgu düzeltildi |
 | E4-02 | Eşleştirme motoru | ⬜ | **KRİTİK: manuel↔ekstre mükerrer-önleme dahil** (ön-muhasebe domain incelemesi 2026-06-26 — çift kayıt riski; kullanıcı "unutmayalım" dedi). Detay: `E4-02_eslestirme_motoru.md` + memory |
 | E4-03 | Dönem-içi hareket dökümü | ⬜ | |
 | E4-04 | Eşleşmeyen işlem uyarıları | ⬜ | |

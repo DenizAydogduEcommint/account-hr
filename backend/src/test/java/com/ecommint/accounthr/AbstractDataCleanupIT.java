@@ -36,6 +36,7 @@ public abstract class AbstractDataCleanupIT {
     private static final List<String> TABLES_CHILD_FIRST = List.of(
             "files",
             "invoices",
+            "raw_transactions",
             "expenses",
             "audit_log",
             "service_contacts",

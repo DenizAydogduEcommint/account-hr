@@ -31,6 +31,7 @@ import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
 import com.ecommint.accounthr.service.storage.StorageException;
 import com.ecommint.accounthr.service.storage.StorageIOException;
+import com.ecommint.accounthr.service.statement.StatementUploadException;
 import com.ecommint.accounthr.service.storage.StoragePathTraversalException;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -294,6 +295,17 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
                 "Request body is malformed or contains an invalid value.", request, null);
+    }
+
+    /**
+     * E4-01 — Ekstre yükleme/onaylama isteğindeki çağıran-girdisi hatası (bilinmeyen kart,
+     * biçimsiz ay, bilinmeyen batch, boş dosya) → 400 VALIDATION_ERROR. Aksi halde genel
+     * handler bunu yanıltıcı bir 500'e çevirirdi.
+     */
+    @ExceptionHandler(StatementUploadException.class)
+    public ResponseEntity<ErrorResponse> handleStatementUpload(
+            StatementUploadException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request, null);
     }
 
     /** İstenen kaynak (ör. id ile servis) bulunamadı → 404 NOT_FOUND. */

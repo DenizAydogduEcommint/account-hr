@@ -42,5 +42,16 @@ Kaan ekstreleri Word VEYA Excel formatında, çoklu kart için gönderiyor (Akba
 
 ## Açık Sorular / Riskler
 - Word ekstrelerin yapısı standart mı yoksa serbest metin mi? Örnek dosyalar gerekli — parse zorluğunu belirler
-- .doc (eski binary) desteklenecek mi yoksa sadece .docx mi? — Karar gerekli
-- PDF ekstre gelirse kapsama dahil mi? (Şimdilik hariç, gerekirse ayrı görev)
+- .doc (eski binary) desteklenecek mi yoksa sadece .docx mi? — **Karar: sadece .docx** (.doc unsupported uyarısı). PDF de şimdilik hariç (unsupported uyarısı).
+
+## Tamamlanma Kaydı
+- Durum: **Altyapı tamamlandı — 2026-06-27** · ⚠️ **Gerçek parser örnek ekstre bekliyor** (placeholder dönüyor)
+- YouTrack: IK-249 (sıralı varsayım — teyit edilecek)
+- Repo: account-hr (backend) + account-hr-frontend
+- **Karar (kullanıcı):** Altyapı önce kuruldu; format-spesifik satır-çıkarma örnek Akbank/YKB/Ziraat ekstresi gelince eklenecek (çatı değişmeden).
+- **Backend:** `RawTransaction` (ham işlem; matched=false, E4-02 eşleştirecek) + **V19** migration. `StatementParser` SPI (`ParseResult`/`ParsedTxn`) + `DefaultStatementParser` (format algılama: .xlsx→XSSF, .xls→HSSF, .docx→XWPF; .doc/.pdf→unsupported uyarı) → `BankStatementExtractor` SPI. **`PlaceholderBankStatementExtractor` (`// TODO E4-01: gerçek satır çıkarma — örnek ekstre gelince`)** boş liste + uyarı dönüyor. `POST /api/v1/statements` (multipart file/cardLast4/month) → önizleme `{batchRef(sha256), card, month, transactions, warnings, alreadyUploaded}`; `POST /statements/confirm` + `/discard` (PENDING→CONFIRMED/DISCARDED) → `{batchRef, confirmed}`; `GET /statements/{batchRef}`. Idempotency (sha256+kart+dönem CONFIRMED). Yetki ADMIN+ACCOUNTING. Dosya `STORAGE_ROOT/statements/` (Drive aynasına dokunmaz).
+- **Frontend:** "Ekstre Yükle" ekranı (dosya+kart+ay → önizleme tablosu + uyarı paneli → Onayla/İptal); boş/placeholder/zaten-yüklendi durumları + satır-bazlı parse uyarı göstergesi. Rol-gate (ADMIN+ACCOUNTING) route+menü. OnDestroy temiz.
+- **Gerçek doğrulama (lokal PG14, V19):** raw_transactions tablosu oluştu; upload 200 + bozuk/desteksiz dosyada graceful uyarı (500 değil); confirm `{batchRef, confirmed}`; regresyon yok (eksik Mart=2).
+- Test: backend **308/308** (+13: StatementUploadIT + StatementUploadServiceTest); frontend tsc+ng build temiz.
+- **Bağımsız review:** güvenli alanlar CLEAN (storage Drive-izolasyon, yetki, idempotency-CONFIRMED scope, validation, OnDestroy); **4 bulgu düzeltildi** — confirm `count`→`confirmed` (CRIT), `rawText` DTO'ya (CRIT), idempotency-hit kart+dönem scope (IMP), `sourceFileName` path-traversal sanitize (IMP).
+- **Kalan:** Gerçek parse mantığı (E4-01 parser) örnek ekstre gelince; eşleştirme E4-02.

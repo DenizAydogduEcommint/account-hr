@@ -27,6 +27,7 @@ import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.drive.DriveSyncException;
 import com.ecommint.accounthr.service.drive.DriveSyncValidationException;
 import com.ecommint.accounthr.service.importer.ExcelImportException;
+import com.ecommint.accounthr.service.incoming.RcloneException;
 import com.ecommint.accounthr.service.importer.InvoiceFileImportException;
 import com.ecommint.accounthr.service.storage.DuplicateFileException;
 import com.ecommint.accounthr.service.storage.StorageException;
@@ -240,11 +241,27 @@ public class GlobalExceptionHandler {
     /**
      * Drive {@code waiting/} senkron köprüsü (E2-06) hatası: rclone yok/başarısız/zaman
      * aşımı veya Drive erişilemez → 502 BAD_GATEWAY. Bir dış bağımlılık (rclone/Drive)
-     * sorunudur; uygulamanın kendi 500 hatası DEĞİLDİR. Ham stderr/stack mesaja konmaz.
+     * sorunudur; uygulamanın kendi 500 hatası DEĞİLDİR. {@code ex.getMessage()} mutlak
+     * yol/stderr içerebilir → YANITA KONMAZ; sabit mesaj döner, orijinali traceId ile loglanır.
      */
     @ExceptionHandler(DriveSyncException.class)
     public ResponseEntity<ErrorResponse> handleDriveSync(DriveSyncException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_GATEWAY, "DRIVE_SYNC_ERROR", ex.getMessage(), request, null);
+        logSanitized("DRIVE_SYNC_ERROR", ex, request);
+        return build(HttpStatus.BAD_GATEWAY, "DRIVE_SYNC_ERROR",
+                "Drive sync operation failed.", request, null);
+    }
+
+    /**
+     * E5-02 — Ham fatura PULL (rclone copy remote → local) dış-bağımlılık hatası: rclone
+     * yok/başarısız/zaman aşımı → 502 BAD_GATEWAY (uygulamanın kendi 500'ü DEĞİL).
+     * {@code ex.getMessage()} mutlak STORAGE_ROOT/landing/dosya yollarını içerir → YANITA
+     * KONMAZ (bilgi sızıntısı); sabit mesaj döner, orijinali traceId ile yalnızca loglanır.
+     */
+    @ExceptionHandler(RcloneException.class)
+    public ResponseEntity<ErrorResponse> handleRclone(RcloneException ex, HttpServletRequest request) {
+        logSanitized("DRIVE_SYNC_ERROR", ex, request);
+        return build(HttpStatus.BAD_GATEWAY, "DRIVE_SYNC_ERROR",
+                "Drive pull operation failed.", request, null);
     }
 
     /**

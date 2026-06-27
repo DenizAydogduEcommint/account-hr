@@ -9,6 +9,7 @@ import org.hibernate.type.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.ecommint.accounthr.domain.AppUser;
 import com.ecommint.accounthr.domain.FileAsset;
 import com.ecommint.accounthr.domain.Invoice;
 import com.ecommint.accounthr.domain.Service;
@@ -49,9 +50,17 @@ public class AuditInterceptor implements Interceptor {
 
     private static final Logger log = LoggerFactory.getLogger(AuditInterceptor.class);
 
-    /** Denetlenen entity'lerin basit (simple) adları → audit_log.entity_type. */
+    /**
+     * Denetlenen entity'lerin basit (simple) adları → audit_log.entity_type.
+     *
+     * <p>{@code AppUser} erişim-kontrol izlenebilirliği için denetlenir (kullanıcıyı kim
+     * oluşturdu, rolü/aktifliğini/e-postasını kim değiştirdi). Hassas alanlar (özellikle
+     * {@code passwordHash}) {@link #SENSITIVE_FIELDS} ile FİLTRELENİR ve audit'e ASLA
+     * yazılmaz; ayrıca CREATE yolu ({@code onSave}) yalnızca entity tipini + id'sini yazar
+     * (hiçbir alan değeri yakalamaz), bu yüzden yeni kullanıcının hash'i CREATE'te de sızmaz.</p>
+     */
     private static final Set<String> AUDITED_TYPES =
-            Set.of("Invoice", "FileAsset", "Service");
+            Set.of("Invoice", "FileAsset", "Service", "AppUser");
 
     /** Audit'e asla yazılmayacak alan adları (entity hangisi olursa olsun). */
     private static final Set<String> SENSITIVE_FIELDS = Set.of(
@@ -72,6 +81,9 @@ public class AuditInterceptor implements Interceptor {
         if (entity instanceof Service) {
             return "Service";
         }
+        if (entity instanceof AppUser) {
+            return "AppUser";
+        }
         return null;
     }
 
@@ -84,6 +96,11 @@ public class AuditInterceptor implements Interceptor {
     public boolean onSave(Object entity, Object id, Object[] state,
             String[] propertyNames, Type[] types) {
         if (isAudited(entity)) {
+            // CREATE yolu HİÇBİR alan değeri yakalamaz — yalnızca entity tipi + id (flush
+            // sonrası reflection ile) yazılır. fieldName/oldValue/newValue daima NULL'dır.
+            // Bu nedenle yeni bir AppUser'ın passwordHash'i (veya herhangi bir hassas alanı)
+            // CREATE audit satırına ASLA ulaşamaz; SENSITIVE_FIELDS filtresi UPDATE
+            // (onFlushDirty) yolunda alan-bazlı uygulanır.
             enqueue(new AuditEntry(
                     entity, typeOf(entity), AuditAction.CREATE,
                     null, null, null, null));

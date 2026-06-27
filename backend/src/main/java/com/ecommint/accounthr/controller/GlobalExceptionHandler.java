@@ -21,7 +21,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.ecommint.accounthr.dto.ErrorResponse;
 import com.ecommint.accounthr.dto.ErrorResponses;
+import com.ecommint.accounthr.service.DuplicateEmailException;
 import com.ecommint.accounthr.service.IllegalStatusTransitionException;
+import com.ecommint.accounthr.service.LastAdminException;
 import com.ecommint.accounthr.service.InvalidExpenseRequestException;
 import com.ecommint.accounthr.service.ResourceNotFoundException;
 import com.ecommint.accounthr.service.drive.DriveSyncException;
@@ -323,6 +325,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleStatementUpload(
             StatementUploadException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request, null);
+    }
+
+    /**
+     * E1-08 — Aynı e-posta ile kullanıcı oluşturma girişimi → 409 CONFLICT. Mesaj
+     * kullanıcı-dostu ve sabit; hassas veri içermez.
+     */
+    @ExceptionHandler(DuplicateEmailException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateEmail(
+            DuplicateEmailException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "DUPLICATE_EMAIL", ex.getMessage(), request, null);
+    }
+
+    /**
+     * E1-08 — Son aktif yöneticiyi düşürme/pasifleştirme girişimi → 409 CONFLICT.
+     * Sistemde her zaman en az bir aktif ADMIN kalmalıdır.
+     */
+    @ExceptionHandler(LastAdminException.class)
+    public ResponseEntity<ErrorResponse> handleLastAdmin(
+            LastAdminException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "LAST_ADMIN", ex.getMessage(), request, null);
     }
 
     /** İstenen kaynak (ör. id ile servis) bulunamadı → 404 NOT_FOUND. */

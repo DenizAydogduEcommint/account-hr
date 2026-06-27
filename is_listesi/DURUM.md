@@ -5,7 +5,7 @@
 > **Durum simgeleri:** ✅ Tamamlandı · 🔄 Devam ediyor · ⬜ Bekliyor · ⏸️ Bloklu
 
 **Son güncelleme:** 2026-06-26
-**Özet:** **E1 + E2 + E3 epic TAMAM** (E3 11/11: E3-01..09 + E3-10 eksik-tutar + E3-11 KDV ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit/tutar + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme + KDV ayrımı) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı.** Sıradaki: **E4 (banka ekstresi + eşleştirme motoru — manuel↔ekstre mükerrer-önleme kritik, E4-02)**
+**Özet:** **E1 + E2 + E3 epic TAMAM** (E3 11/11: E3-01..09 + E3-10 eksik-tutar + E3-11 KDV ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit/tutar + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme + KDV ayrımı) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı.** · **E4-01 altyapı + E5-02 Drive pull yapıldı (devamı bekleyen girdilere bağlı)** · **UX: 6 sayfada açıklayıcı bilgi kartları (PageInfoCard)** · Sıradaki: **E4 (örnek ekstre gelince) / E5-04 (eşleştirme)**
 
 ## ⚠️ BEKLEYEN / BLOKLU İŞLER (dış girdi gerektirir — teknik borç DEĞİL)
 > Bunlar kod eksiği değil; **örnek dosya / deploy hedefi / manuel aksiyon** beklediği için yapılamayan işler. Unutulmamalı.

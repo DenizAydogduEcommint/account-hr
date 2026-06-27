@@ -7,6 +7,24 @@
 **Son güncelleme:** 2026-06-26
 **Özet:** **E1 + E2 + E3 epic TAMAM** (E3 11/11: E3-01..09 + E3-10 eksik-tutar + E3-11 KDV ✅) · **MVP çekirdeği tam çalışıyor** (harcamalar + eksik fatura tespit/tutar + fatura yükleme + manuel giriş + durum state machine + rol bazlı görünümler + fatura önizleme + KDV ayrımı) · sıfır teknik borç · **MVP = E1 + E2 + E3 tamamlandı.** Sıradaki: **E4 (banka ekstresi + eşleştirme motoru — manuel↔ekstre mükerrer-önleme kritik, E4-02)**
 
+## ⚠️ BEKLEYEN / BLOKLU İŞLER (dış girdi gerektirir — teknik borç DEĞİL)
+> Bunlar kod eksiği değil; **örnek dosya / deploy hedefi / manuel aksiyon** beklediği için yapılamayan işler. Unutulmamalı.
+
+**A) Gerçek örnek banka ekstresi gelince (Akbank ****3800 / YKB ****3909 / Ziraat ****9164 — Word/Excel):**
+- **E4-01 gerçek parser** — altyapı hazır, `PlaceholderBankStatementExtractor` içindeki `// TODO E4-01: gerçek satır çıkarma` doldurulacak. Örnek olmadan parse mantığı yazılamaz (banka formatı tahmin edilemez).
+- **E4-02 eşleştirme motoru + manuel↔ekstre mükerrer-önleme** — parser çıktısına (CONFIRMED RawTransaction) bağlı; örnek gelmeden gerçek veriyle test edilemez. (Ayrıca `[[account-hr-e4-mukerrer-eslestirme]]` memory'de kayıtlı — "unutmayalım" notuyla.)
+- **E4-03 dönem-içi hareket dökümü** — aynı parse-bağımlılığı.
+- **E4-05 banka/kart normalizasyonu** — örnek formatlara bağlı.
+- **Aksiyon:** kullanıcı örnek ekstreleri `~/account-hr-data/` altına koyacak → parser + E4-02 gerçek veriyle yapılacak.
+
+**B) Deploy hedefi/sunucu belli olunca:**
+- **E1-06 CD/staging** — CI yeşil ama otomatik dağıtım (staging) deploy hedefi (sunucu/registry/domain) bekliyor.
+
+**C) Kullanıcı manuel aksiyonu (asistan YouTrack paneline yazamıyor):**
+- **YouTrack yorumları yapıştırma:** IK-243 (E3-06), IK-244 (E3-07), IK-245 (E3-08), IK-246 (E3-09), IK-247 (E3-10), IK-248 (E3-11), IK-249 (E4-01) — hazır metinler verildi, panele işlenecek.
+
+---
+
 ## TEKNİK BORÇ: SIFIR (2026-06-26)
 **Politika (CLAUDE.md):** Arkamızda asla teknik borç bırakmayız — bulgu aynı turda kapatılır, "ertele" yok.
 Üç derin review turunda (holistic E + E2-derin + E1-derin) bulunan **9 teknik borcun TAMAMI kapatıldı**, ardından kapatma kodu **4 paralel adversarial reviewer** ile denetlendi → çıkan **8 bulgu (4 critical) düzeltildi** → canlı PG'de doğrulandı. **Açık borç kalmadı.**

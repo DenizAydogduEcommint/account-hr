@@ -102,6 +102,11 @@ cd frontend && npm test
 - JWT: `HttpInterceptor` ile token; 401'de logout.
 - DB değişiklikleri Flyway/Liquibase migration olarak; elle şema değiştirme yok.
 - Sırlar (Paraşüt/mail/Drive/panel login) **repoya commit edilmez** — `.env` / secret yönetimi. `.gitignore` ile koru.
+- **Kural #5 — Kaynaktan doğrula, ASLA TAHMİN ETME:** Dosya, sembol, API alan adı, davranış veya sonuç tahmin edilmez; **kaynaktan/gerçek çıktıdan teyit edilir.** Özellikle:
+  - `tsc` / `ng build` temiz olması uygulamanın **çalıştığı anlamına GELMEZ.** Frontend bir iş bitince commit'ten ÖNCE tarayıcıda aç (Playwright `browser_navigate` + `browser_console_messages` ile 0 hata + sayfa render). Runtime DI/route hataları (NG0200, NG04014 gibi) yalnızca tarayıcıda görünür → beyaz sayfa.
+  - Backend değişiklikleri **gerçek PostgreSQL**'de doğrulanır; test yeşili tek başına yetmez.
+  - UI metni/yönlendirmesi **gerçek ekrandan** doğrulanır — "yukarıdan/aşağıdan/sağdaki" gibi konum ifadeleri gerçek yerleşimle eşleşmeli; bir butona yönlendiren metin o buton gerçekten çalışıyorsa yazılır.
+  - Cross-repo API sözleşmesi (alan adları, endpoint) **her iki tarafta da kaynaktan** teyit edilir — sessiz uyumsuzluk (silent drift) riski.
 
 ## İş Takibi (YouTrack) — ÖNEMLİ
 - Görev/backlog **YouTrack**'te: proje **IK / "Ön Muhasebe"** alt-projesi, issue **IK-225 … IK-276** (52 görev).

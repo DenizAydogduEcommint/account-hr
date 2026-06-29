@@ -121,6 +121,16 @@
 			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Apache PDFBox 3.x: fatura PDF metnini çıkarmak için (E5-03).
+		     Loader.loadPDF(byte[]) + PDFTextStripper ile düz metin alınır;
+		     InvoicePdfParser bu metni regex'lerle yapılandırılmış alanlara çevirir.
+		     Spring Boot 3.5 BOM PDFBox'ı yönetmediğinden sürüm burada sabitlenir. -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.5</version>
+		</dependency>
 	</dependencies>
 
 	<build>

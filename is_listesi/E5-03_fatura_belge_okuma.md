@@ -45,3 +45,14 @@ Faturalar çok farklı formatlarda geliyor: dijital PDF (metin katmanı var), ta
 - OCR doğruluğu düşük olabilir (taranmış, kötü kalite) — manuel düzeltme akışı (E3-04) şart.
 - LLM tabanlı çıkarım (örn. belge → JSON) daha esnek olabilir ama maliyet/gizlilik — ileride değerlendirilecek, bu sprintte heuristic + OCR.
 - Çok dilli faturalar (EN/TR) — Tesseract dil paketleri.
+
+## Tamamlanma Kaydı
+- Durum: **PDF okuma tamamlandı — 2026-06-29** · ⚠️ JPG/görüntü OCR sonraki iş (Tesseract/Tess4J)
+- YouTrack: IK-252 (varsayım — teyit edilecek)
+- Repo: account-hr (backend)
+- **Kaynak:** Selman'ın paylaştığı 13 gerçek servis faturası (OpenAI/ChatGPT/Kapwing/Lucidchart/OpenRouter/Wondershare, 2025-09..12). Gerçek dosyalardan pattern türetildi (Kural #5).
+- **Backend:** Apache **PDFBox 3.0.5**. `InvoicePdfParser` (PDF metni → `invoiceNumber, issueDate, totalAmount, currency, vatAmount, vatRate, providerName`; tüm alanlar nullable, eşleşmezse uyarı, asla throw etmez). 4 format: İngilizce/Türkçe Stripe, Lucidchart (kısa ay), Wondershare (ISO tarih, işaretsiz tutar, "VAT NO" decoy ayıklama). Para `1,234.56`/`1.234,56`/`1,234`(binlik)/işaretsiz; tarih `Month D, YYYY`/`MMM D`/ISO/Türkçe ay. `POST /api/v1/invoices/parse` (multipart, ADMIN+ACCOUNTING; **dosya saklanmaz**; >10MB/non-pdf→400, bozuk→200+uyarı). **`rawText` response'ta YOK** (gizli veri sızıntısı önlendi).
+- **Güvenlik/gizlilik:** Gerçek faturalar **repoya konmadı**; testler sentetik PDF (`SyntheticInvoicePdf`).
+- **Gerçek doğrulama (lokal PG14, 13 gerçek fatura):** **13/13** no+tarih+tutar+para birimi+sağlayıcı doğru; KDV olanlarda doğru (6/10/2/0.0/2.72), yoksa null. Para birimi parantez-içi ₺'ye kanmadı; KDV decoy ayıklandı.
+- Test: backend **350/350** (+17). Bağımsız review: rawText/decoy/currency/validation CLEAN; 2 muhasebe-bulgusu düzeltildi — `1,234` binlik-ayraç misparse (kritik), TOTAL satır-başı anchor + definitive-payable.
+- **Kalan:** JPG→OCR (Tesseract); parse sonucunu yükleme/eşleştirme akışına bağlama (E3-05/E5-04); frontend "yükle→otomatik doldur".

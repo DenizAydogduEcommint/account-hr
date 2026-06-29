@@ -133,7 +133,7 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 |-------|--------|-------|-----|
 | E5-01 | Accounting mail entegrasyonu | ⛔ | **BLOKLU** — IMAP/Gmail credential bekliyor (Fatma'ya soruldu 2026-06-27) |
 | E5-02 | Drive waiting pull | ✅ | IK-250. PULL+INGEST (IncomingInvoice+V20, copy-only güvenli, "Gelen Faturalar" ekranı). 319 test. Review Drive-güvenlik CLEAN + 5 bulgu düzeltildi. Taşıma/silme E5-04 sonrası |
-| E5-03 | Fatura belge okuma (OCR/parse) | ⬜ | |
+| E5-03 | Fatura belge okuma (OCR/parse) | 🔄 | IK-252. **PDF okuma ✅** (PDFBox 3.0.5, InvoicePdfParser, POST /invoices/parse). Selman'ın 13 gerçek faturasıyla **13/13 doğru** (no/tarih/tutar/KDV/sağlayıcı). 350 test. Review 2 muhasebe-fix. ⚠️ JPG→OCR kaldı |
 | E5-04 | Servis-fatura eşleştirme | ⬜ | |
 | E5-05 | Servis paneli indirme worker | ⬜ | |
 | E5-06 | Toplama orkestrasyonu | ⬜ | |

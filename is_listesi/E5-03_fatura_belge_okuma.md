@@ -48,7 +48,7 @@ Faturalar çok farklı formatlarda geliyor: dijital PDF (metin katmanı var), ta
 
 ## Tamamlanma Kaydı
 - Durum: **PDF okuma tamamlandı — 2026-06-29** · ⚠️ JPG/görüntü OCR sonraki iş (Tesseract/Tess4J)
-- YouTrack: IK-252 (varsayım — teyit edilecek)
+- YouTrack: IK-254 (YouTrack'ten teyit edildi 2026-06-29)
 - Repo: account-hr (backend)
 - **Kaynak:** Selman'ın paylaştığı 13 gerçek servis faturası (OpenAI/ChatGPT/Kapwing/Lucidchart/OpenRouter/Wondershare, 2025-09..12). Gerçek dosyalardan pattern türetildi (Kural #5).
 - **Backend:** Apache **PDFBox 3.0.5**. `InvoicePdfParser` (PDF metni → `invoiceNumber, issueDate, totalAmount, currency, vatAmount, vatRate, providerName`; tüm alanlar nullable, eşleşmezse uyarı, asla throw etmez). 4 format: İngilizce/Türkçe Stripe, Lucidchart (kısa ay), Wondershare (ISO tarih, işaretsiz tutar, "VAT NO" decoy ayıklama). Para `1,234.56`/`1.234,56`/`1,234`(binlik)/işaretsiz; tarih `Month D, YYYY`/`MMM D`/ISO/Türkçe ay. `POST /api/v1/invoices/parse` (multipart, ADMIN+ACCOUNTING; **dosya saklanmaz**; >10MB/non-pdf→400, bozuk→200+uyarı). **`rawText` response'ta YOK** (gizli veri sızıntısı önlendi).

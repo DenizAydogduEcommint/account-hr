@@ -39,7 +39,7 @@ Bir ön-muhasebe domain incelemesinde (2026-06-26) tespit edildi: dashboard ve e
 
 ## Tamamlanma Kaydı
 - Durum: Tamamlandı — 2026-06-26
-- YouTrack: IK-247 (sıralı varsayım — teyit edilecek)
+- YouTrack: IK-287 (YouTrack'ten teyit edildi 2026-06-29)
 - Repo: account-hr (backend) + account-hr-frontend
 - **Kaynak:** Ön-muhasebe domain incelemesi (2026-06-26) — "belgesiz gider TL görünürlüğü" tespiti.
 - **Backend:** `GET /api/v1/missing-invoices` artık wrapper `{items, count, approxTotalTry}` (önceden çıplak liste — breaking, tüm çağıran test'ler güncellendi). `MissingInvoiceService.approxTotalTry` (null→+0, scale 2 HALF_UP). `DashboardSummary.missingTotalTry` — `missingCount` ile **aynı row-set'ten** türetiliyor (tutarsızlık imkânsız).

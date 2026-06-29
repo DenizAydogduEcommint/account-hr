@@ -7,7 +7,7 @@
 | Bağımlılıklar | E1-03 (auth/JWT), E3-08 (rol matrisi) |
 | Tahmini Efor | 4 puan |
 | Etiketler | backend, frontend, auth, admin, guvenlik |
-| YouTrack | IK-251 (varsayım — teyit edilecek) |
+| YouTrack | YouTrack issue henüz açılmadı — Epic 1 (IK-291) altında açılacak |
 
 ## Amaç
 Yöneticilerin sisteme giriş yapacak kullanıcıları yönetebileceği bir `/backoffice` sayfası. Başlangıç kapsamı: kullanıcı ekleme (yetki tipi seçerek), şifre sıfırlama, rol değiştirme, aktif/pasif. Sadece ADMIN erişebilir; sol menüde "Backoffice" linki yalnızca ADMIN'e görünür.
@@ -46,7 +46,7 @@ Yöneticilerin sisteme giriş yapacak kullanıcıları yönetebileceği bir `/ba
 
 ## Tamamlanma Kaydı
 - Durum: **Tamamlandı — 2026-06-27**
-- YouTrack: IK-251 (varsayım — teyit edilecek)
+- YouTrack: YouTrack issue henüz açılmadı — Epic 1 (IK-291) altında açılacak
 - Repo: account-hr (backend) + account-hr-frontend
 - **Backend:** `AdminUserController` + `AdminUserService` (base `/api/v1/admin/users`, hepsi `@PreAuthorize("hasRole('ADMIN')")`): GET liste, POST ekle, PATCH /{id}/password|role|active. `AdminUserResponse` (**passwordHash YOK** — test'le kanıtlı). Şifre BCrypt(12), min 8. Email unique (409 DUPLICATE_EMAIL). Şifre değişince hedefin refresh token'ları iptal. **Son-admin koruması: post-mutation validation (save+flush+count<1→409) — TOCTOU yarışına dayanıklı.** AppUser artık audit'leniyor (CREATE/role/active) — passwordHash audit'e ulaşamaz (UPDATE'te SENSITIVE_FIELDS filtreli, CREATE'te yapısal yok). Migration yok (users tablosu mevcut).
 - **Frontend:** `/backoffice` (roleGuard ADMIN), sidebar "Backoffice" yalnız ADMIN. Kullanıcı tablosu (TR rol/durum badge), "Yeni Kullanıcı" + "Şifre Sıfırla" modalları. **Şifre çift-giriş (eşleşme kontrolü) + göz ikonu (göster/gizle)** her iki modalda. 409 (son-admin/dup) mesajı inline. Info kartı. OnDestroy temiz.

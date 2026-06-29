@@ -48,7 +48,7 @@ Türkiye'de yaygın oranlar: %0, %1, %10, %20 (+ serbest giriş). KDV oranı **o
 
 ## Tamamlanma Kaydı
 - Durum: Tamamlandı — 2026-06-26
-- YouTrack: IK-248 (sıralı varsayım — teyit edilecek)
+- YouTrack: IK-288 (YouTrack'ten teyit edildi 2026-06-29)
 - Repo: account-hr (backend) + account-hr-frontend
 - **Kaynak:** Ön-muhasebe domain incelemesi (2026-06-26) — KDV ayrımı eksikliği tespiti.
 - **Backend:** `Invoice`'a `kdvRate`/`kdvAmountTry`/`netAmountTry` (nullable) + **V18** migration. `KdvCalculator`: `net = brüt/(1+oran/100)` (scale 2 HALF_UP), `kdv = brüt − yuvarlanmış_net` (**sum-safe: matrah+KDV=brüt kuruşuna eşit**). `POST /api/v1/invoices` opsiyonel `kdvRate` (0–100; geçersiz→400). `ExpenseRow`'a 3 KDV alanı (temsilci invoice'tan). Brüt = `expense.amountTry` (KDV-dahil); iade negatif → net/kdv negatif tutarlı.

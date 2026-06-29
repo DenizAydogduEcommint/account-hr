@@ -21,7 +21,7 @@
 - **E1-06 CD/staging** — CI yeşil ama otomatik dağıtım (staging) deploy hedefi (sunucu/registry/domain) bekliyor.
 
 **C) Kullanıcı manuel aksiyonu (asistan YouTrack paneline yazamıyor):**
-- **YouTrack yorumları yapıştırma:** IK-243 (E3-06), IK-244 (E3-07), IK-245 (E3-08), IK-246 (E3-09), IK-247 (E3-10), IK-248 (E3-11), IK-249 (E4-01) — hazır metinler verildi, panele işlenecek.
+- **YouTrack yorumları yapıştırma:** IK-243 (E3-06), IK-244 (E3-07), IK-245 (E3-08), IK-246 (E3-09), IK-287 (E3-10), IK-288 (E3-11), IK-247 (E4-01) — hazır metinler verildi, panele işlenecek.
 
 ---
 
@@ -83,7 +83,7 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | E1-05 | Config, secret, loglama, audit | ✅ | IK-229. AES-GCM credential şifreleme, JSON log, Hibernate audit, maskeleme. PG14 V5+validate doğrulandı |
 | E1-06 | CI/CD & dağıtım | 🔄 | IK-230. CI **GitHub'da yeşil doğrulandı** (test izolasyon + npm fallback fix'leri sonrası). CD/staging ertelendi (deploy hedefi bekliyor) |
 | E1-07 | API tasarım standartları | ✅ | IK-231. /api/v1 + ErrorResponse(traceId) + Swagger + PagedResponse + örnek /services. PG14'te canlı doğrulandı |
-| E1-08 | Kullanıcı Yönetimi (Backoffice) | ✅ | IK-251. ADMIN-only /admin/users CRUD-lite; son-admin koruması (TOCTOU-safe), passwordHash gizli, token-revoke, AppUser audit. Frontend /backoffice (şifre çift-giriş+göz). 333 test. Güvenlik review temiz +2 fix |
+| E1-08 | Kullanıcı Yönetimi (Backoffice) | ✅ | YouTrack issue açılacak (Epic 1 / IK-291 altında). ADMIN-only /admin/users CRUD-lite; son-admin koruması (TOCTOU-safe), passwordHash gizli, token-revoke, AppUser audit. Frontend /backoffice (şifre çift-giriş+göz). 333 test. Güvenlik review temiz +2 fix |
 
 ## E2 — Veri Migrasyonu
 | Görev | Başlık | Durum | Not |
@@ -116,13 +116,13 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | E3-07 | Fatura durum state machine | ✅ | PATCH /status, renk türetilir, audit otomatik, MVP serbest geçiş; borç E3-07-DR-1 (buildRow readOnly) |
 | E3-08 | Rol bazlı görünümler | ✅ | IK-245. Her endpoint @PreAuthorize rol matrisi; frontend roleGuard+menü+403+landing. PG14: 3 rol token (team PATCH→403). RoleAuthorizationIT 17. "file ownership" borcu kapandı |
 | E3-09 | Fatura detay / önizleme | ✅ | IK-246. GET /expenses/{id}/files + /files/{id}/preview (inline, path-ifşasız). Frontend Faturalar bölümü + blob preview (PDF iframe/img/XML), mimeType bazlı. PG14: inline preview + 404'ler doğru |
-| E3-10 | Eksik fatura tutar özeti | ✅ | IK-247. Belgesiz gider TL görünürlüğü (muhasebe incelemesinden). missing wrapper + dashboard missingTotalTry. PG14: Mart eksik=2 → ~2.620,05 ₺ tutarlı. Review 0 bulgu |
-| E3-11 | KDV alanları | ✅ | IK-248. Fatura KDV ayrımı (muhasebe incelemesinden). Invoice kdvRate/kdvAmount/netAmount (V18), KdvCalculator (matrah+KDV=brüt sum-safe). PG14: V18 + geriye uyumlu. 295 test. Review kritik temiz |
+| E3-10 | Eksik fatura tutar özeti | ✅ | IK-287. Belgesiz gider TL görünürlüğü (muhasebe incelemesinden). missing wrapper + dashboard missingTotalTry. PG14: Mart eksik=2 → ~2.620,05 ₺ tutarlı. Review 0 bulgu |
+| E3-11 | KDV alanları | ✅ | IK-288. Fatura KDV ayrımı (muhasebe incelemesinden). Invoice kdvRate/kdvAmount/netAmount (V18), KdvCalculator (matrah+KDV=brüt sum-safe). PG14: V18 + geriye uyumlu. 295 test. Review kritik temiz |
 
 ## E4 — Banka Ekstresi
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
-| E4-01 | Ekstre yükleme & parse | 🔄 | IK-249. **Altyapı ✅** (RawTransaction+V19, StatementParser SPI, upload→önizle→onay, idempotency, ADMIN+ACCOUNTING, "Ekstre Yükle" ekranı). ⚠️ **Gerçek parser örnek ekstre bekliyor** (PlaceholderBankStatementExtractor TODO). 308 test. Review 4 bulgu düzeltildi |
+| E4-01 | Ekstre yükleme & parse | 🔄 | IK-247. **Altyapı ✅** (RawTransaction+V19, StatementParser SPI, upload→önizle→onay, idempotency, ADMIN+ACCOUNTING, "Ekstre Yükle" ekranı). ⚠️ **Gerçek parser örnek ekstre bekliyor** (PlaceholderBankStatementExtractor TODO). 308 test. Review 4 bulgu düzeltildi |
 | E4-02 | Eşleştirme motoru | ⬜ | **KRİTİK: manuel↔ekstre mükerrer-önleme dahil** (ön-muhasebe domain incelemesi 2026-06-26 — çift kayıt riski; kullanıcı "unutmayalım" dedi). Detay: `E4-02_eslestirme_motoru.md` + memory |
 | E4-03 | Dönem-içi hareket dökümü | ⬜ | |
 | E4-04 | Eşleşmeyen işlem uyarıları | ⬜ | |
@@ -132,8 +132,8 @@ Toplam migration V1→V16. Backend test 249/249. Canlı doğrulama: eksik Mart=2
 | Görev | Başlık | Durum | Not |
 |-------|--------|-------|-----|
 | E5-01 | Accounting mail entegrasyonu | ⛔ | **BLOKLU** — IMAP/Gmail credential bekliyor (Fatma'ya soruldu 2026-06-27) |
-| E5-02 | Drive waiting pull | ✅ | IK-250. PULL+INGEST (IncomingInvoice+V20, copy-only güvenli, "Gelen Faturalar" ekranı). 319 test. Review Drive-güvenlik CLEAN + 5 bulgu düzeltildi. Taşıma/silme E5-04 sonrası |
-| E5-03 | Fatura belge okuma (OCR/parse) | 🔄 | IK-252. **PDF okuma ✅** (PDFBox 3.0.5, InvoicePdfParser, POST /invoices/parse). Selman'ın 13 gerçek faturasıyla **13/13 doğru** (no/tarih/tutar/KDV/sağlayıcı). 350 test. Review 2 muhasebe-fix. ⚠️ JPG→OCR kaldı |
+| E5-02 | Drive waiting pull | ✅ | IK-253. PULL+INGEST (IncomingInvoice+V20, copy-only güvenli, "Gelen Faturalar" ekranı). 319 test. Review Drive-güvenlik CLEAN + 5 bulgu düzeltildi. Taşıma/silme E5-04 sonrası |
+| E5-03 | Fatura belge okuma (OCR/parse) | 🔄 | IK-254. **PDF okuma ✅** (PDFBox 3.0.5, InvoicePdfParser, POST /invoices/parse). Selman'ın 13 gerçek faturasıyla **13/13 doğru** (no/tarih/tutar/KDV/sağlayıcı). 350 test. Review 2 muhasebe-fix. ⚠️ JPG→OCR kaldı |
 | E5-04 | Servis-fatura eşleştirme | ⬜ | |
 | E5-05 | Servis paneli indirme worker | ⬜ | |
 | E5-06 | Toplama orkestrasyonu | ⬜ | |

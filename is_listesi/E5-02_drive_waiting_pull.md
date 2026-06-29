@@ -46,7 +46,7 @@ Eşleştirme mantığı E5-04'e devredilir; bu görev pull → işleme tetikleme
 
 ## Tamamlanma Kaydı
 - Durum: **PULL + INGEST tamamlandı — 2026-06-27** · ⚠️ taşıma/Drive-silme (E5-04 sonrası) bilinçli ertelendi
-- YouTrack: IK-250 (sıralı varsayım — teyit edilecek)
+- YouTrack: IK-253 (YouTrack'ten teyit edildi 2026-06-29)
 - Repo: account-hr (backend) + account-hr-frontend
 - **Güvenlik kararı:** Bu turda Drive'dan **yalnızca pull (copy)** — push/delete YOK. `RcloneClient` interface'i yapısal olarak sadece `copyToLocal` sunar (push/delete metodu eklenemez). Drive'a silme/taşıma E5-04 eşleştirme sonrası.
 - **Backend:** `IncomingInvoice` (gelen/ham fatura: source DRIVE_WAITING/MAIL, sourceRef idempotency, sha256, status NEW/MATCHED/IGNORED) + **V20** (unique `(source, source_ref)`). `DriveWaitingPullService` (rclone copy gdrive→landing, sha256 dedup, her dosya `STORAGE_ROOT/incoming/<sha256>/`). `POST /incoming/pull` → `{pulledCount, newCount, skippedCount, newInvoices, message}`; `GET /incoming?status=`; `PATCH /incoming/{id}/ignore`. Yetki ADMIN+ACCOUNTING. RcloneException→502.

@@ -46,7 +46,7 @@ Kaan ekstreleri Word VEYA Excel formatında, çoklu kart için gönderiyor (Akba
 
 ## Tamamlanma Kaydı
 - Durum: **Altyapı tamamlandı — 2026-06-27** · ⚠️ **Gerçek parser örnek ekstre bekliyor** (placeholder dönüyor)
-- YouTrack: IK-249 (sıralı varsayım — teyit edilecek)
+- YouTrack: IK-247 (YouTrack'ten teyit edildi 2026-06-29)
 - Repo: account-hr (backend) + account-hr-frontend
 - **Karar (kullanıcı):** Altyapı önce kuruldu; format-spesifik satır-çıkarma örnek Akbank/YKB/Ziraat ekstresi gelince eklenecek (çatı değişmeden).
 - **Backend:** `RawTransaction` (ham işlem; matched=false, E4-02 eşleştirecek) + **V19** migration. `StatementParser` SPI (`ParseResult`/`ParsedTxn`) + `DefaultStatementParser` (format algılama: .xlsx→XSSF, .xls→HSSF, .docx→XWPF; .doc/.pdf→unsupported uyarı) → `BankStatementExtractor` SPI. **`PlaceholderBankStatementExtractor` (`// TODO E4-01: gerçek satır çıkarma — örnek ekstre gelince`)** boş liste + uyarı dönüyor. `POST /api/v1/statements` (multipart file/cardLast4/month) → önizleme `{batchRef(sha256), card, month, transactions, warnings, alreadyUploaded}`; `POST /statements/confirm` + `/discard` (PENDING→CONFIRMED/DISCARDED) → `{batchRef, confirmed}`; `GET /statements/{batchRef}`. Idempotency (sha256+kart+dönem CONFIRMED). Yetki ADMIN+ACCOUNTING. Dosya `STORAGE_ROOT/statements/` (Drive aynasına dokunmaz).
